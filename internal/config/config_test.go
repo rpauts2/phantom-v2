@@ -37,9 +37,7 @@ func TestLoadValid(t *testing.T) {
 }
 
 func TestRejectHardcodedAndBadDNS(t *testing.T) {
-	bad := valid()
-	bad += ""
-	// hardcoded lab domain must fail
+	// реальные домены (включая бывший бан-лист) проходят
 	p := writeTemp(t, `bind: "0.0.0.0"
 https_port: 443
 domains: ["verdebudget.ru"]
@@ -48,8 +46,20 @@ tls: {email: "ops@example.com", dns_provider: "disabled", wildcard: false}
 api: {stealth_hostname: "x.example.com", ca_file: "a", cert_file: "b", key_file: "c"}
 log_level: "info"
 `)
-	if _, err := Load(p); err == nil {
-		t.Fatal("expected hardcoded domain rejection")
+	if _, err := Load(p); err != nil {
+		t.Fatalf("real domain must pass: %v", err)
+	}
+	// мусор вместо FQDN — отказ
+	pBad := writeTemp(t, `bind: "0.0.0.0"
+https_port: 443
+domains: ["not a domain"]
+storage: {sqlite_path: "./data/phantom.db", redis_addr: "127.0.0.1:6379", session_ttl_min: 60}
+tls: {email: "ops@example.com", dns_provider: "disabled", wildcard: false}
+api: {stealth_hostname: "x.example.com", ca_file: "a", cert_file: "b", key_file: "c"}
+log_level: "info"
+`)
+	if _, err := Load(pBad); err == nil {
+		t.Fatal("expected bad domain rejection")
 	}
 	// wildcard without dns provider must fail
 	p2 := writeTemp(t, `bind: "0.0.0.0"

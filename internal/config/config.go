@@ -94,8 +94,8 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("domains: at least 1 required")
 	}
 	for _, d := range c.Domains {
-		if !strings.Contains(d, ".") || strings.Contains(d, " ") || strings.Contains(d, "verdebudget") {
-			return fmt.Errorf("domains: invalid %q (no hardcoded lab domains)", d)
+		if !strings.Contains(d, ".") || strings.ContainsAny(d, " \t/") {
+			return fmt.Errorf("domains: invalid %q (need FQDN)", d)
 		}
 	}
 	if c.Storage.RedisAddr == "" || c.Storage.SQLitePath == "" {
