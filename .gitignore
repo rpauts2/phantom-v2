@@ -1,6 +1,7 @@
 phantom.exe
 phantom
 phantom-*.exe
+*~
 smoke.log
 smoke.err
 data/
