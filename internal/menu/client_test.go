@@ -35,6 +35,19 @@ func fakeAPI() *httptest.Server {
 			w.WriteHeader(201)
 		case "/api/v1/phishlets/reload":
 			w.WriteHeader(204)
+		case "/api/v1/campaigns":
+			if r.Method == http.MethodGet {
+				_, _ = w.Write([]byte(`[{"id":"c1","name":"op","phishlet":"a","status":"running","sent":2,"opened":1,"clicked":1,"submitted":0,"total":2}]`))
+				return
+			}
+			w.WriteHeader(201)
+			_, _ = w.Write([]byte(`{"id":"c1"}`))
+		case "/api/v1/campaigns/c1/targets":
+			_, _ = w.Write([]byte(`{"added":2}`))
+		case "/api/v1/campaigns/c1/launch":
+			_, _ = w.Write([]byte(`{"targets":[{"email":"a@x.com","lure":"/l/x"}]}`))
+		case "/api/v1/campaigns/c1/send":
+			_, _ = w.Write([]byte(`{"sent":2}`))
 		case "/api/v1/phishlets/generate":
 			_, _ = w.Write([]byte("id: g1\n"))
 		default:
@@ -93,6 +106,30 @@ func TestSetPhishlet(t *testing.T) {
 	bad := &Client{Base: srv.URL, Stealth: "wrong"}
 	if err := bad.SetPhishlet("a", []string{"x"}, nil); err == nil {
 		t.Fatal("bad stealth must fail")
+	}
+}
+
+func TestCampClient(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	list, err := c.ListCampaigns()
+	if err != nil || len(list) != 1 || list[0].Total != 2 {
+		t.Fatalf("camps: %+v %v", list, err)
+	}
+	id, err := c.CreateCampaign("op", "a", 60, 1)
+	if err != nil || id != "c1" {
+		t.Fatalf("create: %q %v", id, err)
+	}
+	if n, err := c.AddTargets(id, []string{"a@x.com"}); err != nil || n != 2 {
+		t.Fatalf("targets: %d %v", n, err)
+	}
+	tg, err := c.LaunchCampaign(id)
+	if err != nil || len(tg) != 1 || tg[0].Lure != "/l/x" {
+		t.Fatalf("launch: %+v %v", tg, err)
+	}
+	if n, err := c.SendCampaign(id, "s", "b", "https://m.test"); err != nil || n != 2 {
+		t.Fatalf("send: %d %v", n, err)
 	}
 }
 

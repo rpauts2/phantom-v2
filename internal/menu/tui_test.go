@@ -141,10 +141,10 @@ func TestPhishAdminForms(t *testing.T) {
 		t.Fatalf("toggle: screen=%d err=%v %s", m2.screen, m2.isErr, m2.result)
 	}
 
-	// Domains: idx9 -> пресеты; x удаляет
+// Domains: idx11 -> пресеты; x удаляет
 	m3 := initialModel(c)
 	m3.screen = sMenu
-	for i := 0; i < 9; i++ {
+	for i := 0; i < 11; i++ {
 		nm, _ := m3.Update(down)
 		m3 = nm.(model)
 	}
@@ -157,5 +157,42 @@ func TestPhishAdminForms(t *testing.T) {
 	m3 = nm.(model)
 	if m3.screen != sPick {
 		t.Fatalf("after del: screen=%d %s", m3.screen, m3.result)
+	}
+}
+func TestCampFlow(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	enter := key("enter")
+	// Campaigns idx9 -> пикер
+	m := initialModel(c)
+	m.screen = sMenu
+	for i := 0; i < 9; i++ {
+		nm, _ := m.Update(down)
+		m = nm.(model)
+	}
+	nm, _ := m.Update(enter)
+	m = nm.(model)
+	if m.screen != sPick {
+		t.Fatalf("camps pick: screen=%d", m.screen)
+	}
+	// enter на c1 -> stats
+	nm, _ = m.Update(enter)
+	m = nm.(model)
+	if m.screen != sResult || m.isErr {
+		t.Fatalf("camp stats: screen=%d err=%v %s", m.screen, m.isErr, m.result)
+	}
+	// Campaign+ idx10 -> форма 7 полей
+	m2 := initialModel(c)
+	m2.screen = sMenu
+	for i := 0; i < 10; i++ {
+		nm, _ := m2.Update(down)
+		m2 = nm.(model)
+	}
+	nm, _ = m2.Update(enter)
+	m2 = nm.(model)
+	if m2.screen != sCampNew || len(m2.inputs) != 7 {
+		t.Fatalf("camp form: screen=%d inputs=%d", m2.screen, len(m2.inputs))
 	}
 }

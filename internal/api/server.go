@@ -41,6 +41,7 @@ type Deps struct {
 	NodeID      string               // node_id в stats (мульти-нода)
 	Config      func() map[string]any
 	Presets     DomainPresets
+	Campaigns   any // *campaign.Service (type-assert CampService)
 	PhishDir    string // dir для reload/persist YAML (hot-reload)
 	OnReload    func() error         // Reload стора (main wires store.Reload)
 	OnUpsert    func(yaml []byte) (string, error)
@@ -71,6 +72,7 @@ func Handler(d Deps) http.Handler {
 			next(w, r)
 		}
 	}
+	campRoutes(mux, d, guard)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})

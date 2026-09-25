@@ -129,6 +129,7 @@ curl.exe -v -k https://m365.verdebudget.ru:8443/l/m365-01 2>&1 | Select-String "
 - Консольное меню: `phantom -menu` (Bubble Tea: dashboard, фишлеты, block, smart-lure+, reload, generate — поверх stealth API)
 - WS-инспектор: accept/dial, инспекция text-фреймов (токены via:ws), ping/pong keepalive, read-limit 4MB, fallback в raw-туннель для не-WS апстрима
 - AI-генератор фишлетов: `phantom -gen` (эвристики forms/cookies/mfa + Validate) + опциональный LLM-refine (Ollama/OpenAI-совместимый, ключ env) + `POST /api/v1/phishlets/generate`; Hot-Reload без рестарта (`POST .../reload`, `POST .../phishlets` 201, флаг `-watch-phishlets`)
+- Кампании (лучше Gophish): per-target одноразовые приманки, трекинг open/click/submit (`/__tr/*`), SMTP-рассылка с шаблонами (dry-run по дефолту, креды только env), Botguard-щит на лендингах, `phantom -menu` Campaigns, ранбук `OPERATIONS.md`
 - Multi-node readiness: `node_id` (hostname/env) в логах, событиях и `captures.node`; сессии shared через общий Redis; паттерн в `specs/multinode.md` (без gossip — stateless ноды)
 - Боевые фишлеты: `microsoft365`, `google` (+ генератор); `phantom -phishlets-pull <git-url>` для курируемой DB; Windows-служба `deploy\install-service.ps1`; ранбук `OPERATIONS.md`
 - Evilpuppet: Playwright-Chromium фон (`Chain`: Playwright -> HttpTelemetry -> Noop; браузеры: `playwright install chromium`)

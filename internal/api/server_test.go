@@ -13,7 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"github.com/phantom-v2/phantom/internal/blocklist"
+	"github.com/phantom-v2/phantom/internal/campaign"
 	"github.com/phantom-v2/phantom/internal/lures"
+	"github.com/phantom-v2/phantom/internal/mailer"
 )
 
 func testDeps() Deps {
@@ -323,5 +325,65 @@ func TestDetailAndDomains(t *testing.T) {
 	h2.ServeHTTP(rec5, stealthReq(http.MethodGet, "/api/v1/domains", ""))
 	if rec5.Code != http.StatusNotImplemented {
 		t.Fatalf("no presets: %d", rec5.Code)
+	}
+}
+
+func TestCampaignsAPI(t *testing.T) {
+	d := testDeps()
+	d.Presets = newMemPresets()
+	cs := campaign.NewStore()
+	ls := lures.New()
+	svc := &campaign.Service{Campaigns: cs, Lures: ls, Mail: &mailer.Sender{}}
+	d.Campaigns = svc
+	h := Handler(d)
+	post := func(path, body string) *httptest.ResponseRecorder {
+		req := stealthReq(http.MethodPost, path, body)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	// create
+	rec := post("/api/v1/campaigns", `{"name":"op","phishlet_id":"labtest"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil || created["id"] == "" {
+		t.Fatalf("create body: %v", err)
+	}
+	id := created["id"]
+	// targets
+	rec2 := post("/api/v1/campaigns/"+id+"/targets", `{"emails":["a@x.com","bad","b@x.com"]}`)
+	if rec2.Code != 200 || !strings.Contains(rec2.Body.String(), `"added":2`) {
+		t.Fatalf("targets: %d %s", rec2.Code, rec2.Body.String())
+	}
+	// launch -> персональные lures
+	rec3 := post("/api/v1/campaigns/"+id+"/launch", `{}`)
+	if rec3.Code != 200 || !strings.Contains(rec3.Body.String(), "/l/") {
+		t.Fatalf("launch: %d %s", rec3.Code, rec3.Body.String())
+	}
+	// list со статистикой
+	rec4 := httptest.NewRecorder()
+	h.ServeHTTP(rec4, stealthReq(http.MethodGet, "/api/v1/campaigns", ""))
+	if rec4.Code != 200 || !strings.Contains(rec4.Body.String(), `"total":2`) {
+		t.Fatalf("list: %d %s", rec4.Code, rec4.Body.String())
+	}
+	// send без SMTP: dry-run выключен по дефолту в нулевом Sender -> 400
+	rec5 := post("/api/v1/campaigns/"+id+"/send", `{"subject":"hi","body":"x","url_base":"https://m.test"}`)
+	if rec5.Code != http.StatusBadRequest {
+		t.Fatalf("send no-smtp: %d", rec5.Code)
+	}
+	// неизвестная кампания
+	rec6 := post("/api/v1/campaigns/nope/launch", `{}`)
+	if rec6.Code != http.StatusBadRequest {
+		t.Fatalf("unknown: %d", rec6.Code)
+	}
+	// без сервиса — 501
+	d2 := testDeps()
+	h2 := Handler(d2)
+	rec7 := httptest.NewRecorder()
+	h2.ServeHTTP(rec7, stealthReq(http.MethodGet, "/api/v1/campaigns", ""))
+	if rec7.Code != http.StatusNotImplemented {
+		t.Fatalf("disabled: %d", rec7.Code)
 	}
 }

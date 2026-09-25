@@ -234,3 +234,71 @@ func (c *Client) RemoveDomain(domain string) error {
 	}
 	return nil
 }
+
+// CampInfo — строка списка кампаний со статистикой.
+type CampInfo struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Phishlet  string `json:"phishlet"`
+	Status    string `json:"status"`
+	Sent      int    `json:"sent"`
+	Opened    int    `json:"opened"`
+	Clicked   int    `json:"clicked"`
+	Submitted int    `json:"submitted"`
+	Total     int    `json:"total"`
+}
+
+// CampTarget — персональная приманка цели.
+type CampTarget struct {
+	Email string `json:"email"`
+	Lure  string `json:"lure"`
+}
+
+// ListCampaigns — GET /api/v1/campaigns.
+func (c *Client) ListCampaigns() ([]CampInfo, error) {
+	var out []CampInfo
+	_, err := c.doJSON(http.MethodGet, "/api/v1/campaigns", nil, &out)
+	if out == nil {
+		out = []CampInfo{}
+	}
+	return out, err
+}
+
+// CreateCampaign — POST -> id.
+func (c *Client) CreateCampaign(name, phishlet string, ttlMin, maxUses int) (string, error) {
+	b, _ := json.Marshal(map[string]any{"name": name, "phishlet_id": phishlet, "ttl_min": ttlMin, "max_uses": maxUses})
+	var out map[string]string
+	code, err := c.doJSON(http.MethodPost, "/api/v1/campaigns", strings.NewReader(string(b)), &out)
+	if err != nil {
+		return "", err
+	}
+	if code != http.StatusCreated || out["id"] == "" {
+		return "", fmt.Errorf("campaigns: status %d", code)
+	}
+	return out["id"], nil
+}
+
+// AddTargets — POST emails -> added.
+func (c *Client) AddTargets(id string, emails []string) (int, error) {
+	b, _ := json.Marshal(map[string]any{"emails": emails})
+	var out map[string]int
+	_, err := c.doJSON(http.MethodPost, "/api/v1/campaigns/"+id+"/targets", strings.NewReader(string(b)), &out)
+	return out["added"], err
+}
+
+// LaunchCampaign — POST launch -> персональные lures.
+func (c *Client) LaunchCampaign(id string) ([]CampTarget, error) {
+	var out struct {
+		Targets []CampTarget `json:"targets"`
+	}
+	_, err := c.doJSON(http.MethodPost, "/api/v1/campaigns/"+id+"/launch", nil, &out)
+	return out.Targets, err
+}
+
+// SendCampaign — POST send -> sent.
+func (c *Client) SendCampaign(id, subject, body, urlBase string) (int, error) {
+	b, _ := json.Marshal(map[string]string{"subject": subject, "body": body, "url_base": urlBase})
+	var out map[string]int
+	_, err := c.doJSON(http.MethodPost, "/api/v1/campaigns/"+id+"/send", strings.NewReader(string(b)), &out)
+	return out["sent"], err
+}

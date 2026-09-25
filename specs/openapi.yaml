@@ -21,3 +21,11 @@ paths:
       responses: {'201': {description: created}}
   /dashboard: {get: {responses: {'200': {description: html}}}}
   /ui/: {get: {responses: {'200': {description: operator UI, loopback or stealth host only}}}}
+  /api/v1/campaigns:
+    get: {responses: {'200': {description: list with stats}}}
+    post:
+      requestBody: {content: {application/json: {schema: {type: object, properties: {name: {type: string}, phishlet_id: {type: string}, ttl_min: {type: integer}, max_uses: {type: integer}}}}}}
+      responses: {'201': {description: id}}
+  /api/v1/campaigns/{id}/targets: {post: {responses: {'200': {description: added}}}}
+  /api/v1/campaigns/{id}/launch: {post: {responses: {'200': {description: lures}}}}
+  /api/v1/campaigns/{id}/send: {post: {responses: {'200': {description: sent}}}}
