@@ -26,6 +26,10 @@ func fakeAPI() *httptest.Server {
 		case "/api/v1/phishlets/generate":
 			_, _ = w.Write([]byte("id: g1\n"))
 		default:
+			if r.Method == http.MethodPut {
+				w.WriteHeader(204)
+				return
+			}
 			w.WriteHeader(404)
 		}
 	}))
@@ -59,5 +63,22 @@ func TestClient(t *testing.T) {
 	bad := &Client{Base: srv.URL, Stealth: "wrong"}
 	if _, err := bad.Stats(); err == nil {
 		t.Fatal("bad stealth must fail decode (404 body)")
+	}
+}
+
+func TestSetPhishlet(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	on := true
+	if err := c.SetPhishlet("a", []string{"evil.test"}, &on); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetPhishlet("a", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	bad := &Client{Base: srv.URL, Stealth: "wrong"}
+	if err := bad.SetPhishlet("a", []string{"x"}, nil); err == nil {
+		t.Fatal("bad stealth must fail")
 	}
 }

