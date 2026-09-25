@@ -44,3 +44,26 @@ curl -X POST .../api/v1/lures -d '{"path":"/l/op01","phishlet_id":"microsoft365"
 
 ## 6. Завершение
 Остановить службу, снять DNS-записи, отозвать wildcard (ACME), выгрузить `phantom.db` в отчет, затереть Redis (`FLUSHDB` на кампейном инстансе).
+
+## 7. Ручной тест в браузере (Microsoft 365, полный перехват)
+
+Подготовка: сервер запущен, `m365.*` резолвится на него, фишлет
+`microsoft365` загружен (`/api/v1/phishlets` содержит его).
+
+1. Открыть `https://m365.verdebudget.ru:8443/l/m365-01` (сертификат lab —
+   «Дополнительно → Перейти»). Должна отрисоваться страница входа MS
+   1в1: логотипы и стили на месте (статика идет через `msauth`/`msauthimg`).
+2. Открыть DevTools → Network: красных (failed) запросов к нашим хостам
+   быть не должно; в адресной строке весь путь — наш хост.
+3. Ввести ТЕСТОВУЮ пару (не боевую!) и отправить. Фиксируется:
+   `capture.creds` (dashboard `captures` +1, Telegram-алерт).
+4. Второй фактор по наличию на акке:
+   - TOTP (код из приложения) → `capture.mfa kind=totp`;
+   - Push в Authenticator (кнопка Approve) → `capture.mfa kind=push`;
+   - FIDO2/passkey → ceremony ретранслируется, фиксируется
+     `capture.mfa kind=webauthn` (приватник origin-bound, сам ключ
+     не извлекается — честное ограничение).
+5. После входа сессия живет под `owa.*` (post-login OWA в том же фишлете):
+   `capture.token` на ESTSAUTH/ESTSAUTHPERSISTENT.
+6. В отчет: скрин сломанного (если есть) + красные URL из DevTools +
+   значение `captures` до/после + куда увел финальный редирект.

