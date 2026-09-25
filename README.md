@@ -31,6 +31,8 @@ curl -H "X-Stealth-Host: api-internal.example.com" http://127.0.0.1:8080/dashboa
 - WS-инспектор: accept/dial, инспекция text-фреймов (токены via:ws), ping/pong keepalive, read-limit 4MB, fallback в raw-туннель для не-WS апстрима
 - AI-генератор фишлетов: `phantom -gen` (эвристики forms/cookies/mfa + Validate) + опциональный LLM-refine (Ollama/OpenAI-совместимый, ключ env) + `POST /api/v1/phishlets/generate`; Hot-Reload без рестарта (`POST .../reload`, `POST .../phishlets` 201, флаг `-watch-phishlets`)
 - Multi-node readiness: `node_id` (hostname/env) в логах, событиях и `captures.node`; сессии shared через общий Redis; паттерн в `specs/multinode.md` (без gossip — stateless ноды)
+- Боевые фишлеты: `microsoft365`, `google` (+ генератор); `phantom -phishlets-pull <git-url>` для курируемой DB; Windows-служба `deploy\install-service.ps1`; ранбук `OPERATIONS.md`
+- Evilpuppet: Playwright-Chromium фон (`Chain`: Playwright -> HttpTelemetry -> Noop; браузеры: `playwright install chromium`)
 - Sessions: Failover dual-write Redis+memory (смерть Redis не теряет сессии), создание пишется в sqlite
 - EventBus persistent (creds/token/mfa -> sqlite, без plaintext) + metrics per-phishlet + detector-as-code (веса унифицированы с botguard) + rate-limit
 - Proxy fidelity: Location/Cookie rewrite (+SameSite/Path), JSON+form creds, sid validate + IP/JA4 bind + Secure, remoteIP/SplitHostPort (IPv6), X-Forwarded-Host fix, WS-туннель с дедлайнами/done-channel, байтовые замены без string-аллокаций

