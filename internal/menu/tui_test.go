@@ -81,29 +81,81 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
+
 func TestPhishAdminForms(t *testing.T) {
-	m := initialModel(&Client{Base: "http://127.0.0.1:1", Stealth: "x"})
-	m.screen = sMenu
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
 	down := tea.KeyMsg{Type: tea.KeyDown}
+	enter := key("enter")
+
+	// Phishlet domain: меню idx7 -> пикер фишлетов
+	m := initialModel(c)
+	m.screen = sMenu
 	for i := 0; i < 7; i++ {
 		nm, _ := m.Update(down)
 		m = nm.(model)
 	}
-	nm, _ := m.Update(key("enter"))
+	nm, _ := m.Update(enter)
 	m = nm.(model)
-	if m.screen != sPhishDomain || len(m.inputs) != 2 {
-		t.Fatalf("domain form: screen=%d inputs=%d", m.screen, len(m.inputs))
+	if m.screen != sPick || m.pickKind != "phish-domain" {
+		t.Fatalf("phish picker: screen=%d kind=%s", m.screen, m.pickKind)
 	}
-	nm, _ = m.Update(key("esc"))
+	// enter на "a" -> пикер доменов (пресет evil.test + новый)
+	nm, _ = m.Update(enter)
 	m = nm.(model)
-	for i := 0; i < 1; i++ {
-		nm, _ := m.Update(down)
-		m = nm.(model)
+	if m.screen != sPick || m.pickKind != "domain" {
+		t.Fatalf("domain picker: screen=%d kind=%s", m.screen, m.pickKind)
 	}
-	nm, _ = m.Update(key("enter"))
+	if m.pickPhishlet != "a" {
+		t.Fatalf("phishlet ctx: %q", m.pickPhishlet)
+	}
+	// курсор на "+ новый домен…" (первый) -> форма
+	nm, _ = m.Update(enter)
 	m = nm.(model)
-	if m.screen != sPhishToggle || len(m.inputs) != 2 {
-		t.Fatalf("toggle form: screen=%d inputs=%d", m.screen, len(m.inputs))
+	if m.screen != sDomainAdd || len(m.inputs) != 1 {
+		t.Fatalf("domain add: screen=%d inputs=%d", m.screen, len(m.inputs))
+	}
+	m.inputs[0].SetValue("n.test")
+	nm, _ = m.Update(enter)
+	m = nm.(model)
+	if m.screen != sResult || m.isErr {
+		t.Fatalf("apply: screen=%d err=%v %s", m.screen, m.isErr, m.result)
+	}
+
+	// Phishlet on/off: idx8 -> пикер -> enter сразу тоглит
+	m2 := initialModel(c)
+	m2.screen = sMenu
+	for i := 0; i < 8; i++ {
+		nm, _ := m2.Update(down)
+		m2 = nm.(model)
+	}
+	nm, _ = m2.Update(enter)
+	m2 = nm.(model)
+	if m2.screen != sPick || m2.pickKind != "phish-toggle" {
+		t.Fatalf("toggle picker: screen=%d kind=%s", m2.screen, m2.pickKind)
+	}
+	nm, _ = m2.Update(enter)
+	m2 = nm.(model)
+	if m2.screen != sResult || m2.isErr {
+		t.Fatalf("toggle: screen=%d err=%v %s", m2.screen, m2.isErr, m2.result)
+	}
+
+	// Domains: idx9 -> пресеты; x удаляет
+	m3 := initialModel(c)
+	m3.screen = sMenu
+	for i := 0; i < 9; i++ {
+		nm, _ := m3.Update(down)
+		m3 = nm.(model)
+	}
+	nm, _ = m3.Update(enter)
+	m3 = nm.(model)
+	if m3.screen != sPick || m3.pickKind != "domains" {
+		t.Fatalf("domains pick: screen=%d kind=%s", m3.screen, m3.pickKind)
+	}
+	nm, _ = m3.Update(key("x"))
+	m3 = nm.(model)
+	if m3.screen != sPick {
+		t.Fatalf("after del: screen=%d %s", m3.screen, m3.result)
 	}
 }
-

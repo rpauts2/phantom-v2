@@ -180,3 +180,57 @@ func (c *Client) SetPhishlet(id string, domains []string, enabled *bool) error {
 	}
 	return nil
 }
+
+// PhishletInfo — строка detail (id/enabled/domains) для пикеров.
+type PhishletInfo struct {
+	ID      string   `json:"id"`
+	Enabled bool     `json:"enabled"`
+	Domains []string `json:"domains"`
+}
+
+// PhishletsDetail — /api/v1/phishlets/detail.
+func (c *Client) PhishletsDetail() ([]PhishletInfo, error) {
+	var out []PhishletInfo
+	_, err := c.doJSON(http.MethodGet, "/api/v1/phishlets/detail", nil, &out)
+	return out, err
+}
+
+// ListDomains — /api/v1/domains.
+func (c *Client) ListDomains() ([]string, error) {
+	var out []string
+	_, err := c.doJSON(http.MethodGet, "/api/v1/domains", nil, &out)
+	if out == nil {
+		out = []string{}
+	}
+	return out, err
+}
+
+// AddDomain — POST preset.
+func (c *Client) AddDomain(domain string) error {
+	b, _ := json.Marshal(map[string]string{"domain": domain})
+	code, err := c.doJSON(http.MethodPost, "/api/v1/domains", strings.NewReader(string(b)), nil)
+	if err != nil {
+		return err
+	}
+	if code != http.StatusCreated {
+		return fmt.Errorf("domains: status %d", code)
+	}
+	return nil
+}
+
+// RemoveDomain — DELETE preset.
+func (c *Client) RemoveDomain(domain string) error {
+	r, err := c.req(http.MethodDelete, "/api/v1/domains/"+domain, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http().Do(r)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("domains: status %d", resp.StatusCode)
+	}
+	return nil
+}

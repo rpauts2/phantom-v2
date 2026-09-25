@@ -253,3 +253,75 @@ func TestPhishletAdmin(t *testing.T) {
 		t.Fatalf("get admin: %d", rec.Code)
 	}
 }
+
+type memPresets struct{ m map[string]bool }
+
+func newMemPresets() *memPresets { return &memPresets{m: map[string]bool{}} }
+
+func (s *memPresets) AddDomainPreset(domain string) error {
+	if domain == "" || len(domain) < 3 {
+		return errString("bad")
+	}
+	s.m[domain] = true
+	return nil
+}
+
+func (s *memPresets) ListDomainPresets() ([]string, error) {
+	var out []string
+	for k := range s.m {
+		out = append(out, k)
+	}
+	return out, nil
+}
+
+func (s *memPresets) RemoveDomainPreset(domain string) error {
+	delete(s.m, domain)
+	return nil
+}
+
+func TestDetailAndDomains(t *testing.T) {
+	d := testDeps()
+	d.Presets = newMemPresets()
+	h := Handler(d)
+	// detail: id/enabled/domains
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, stealthReq(http.MethodGet, "/api/v1/phishlets/detail", ""))
+	if rec.Code != 200 {
+		t.Fatalf("detail: %d", rec.Code)
+	}
+	var rows []struct {
+		ID      string
+		Enabled bool
+		Domains []string
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&rows); err != nil || len(rows) == 0 {
+		t.Fatalf("detail body: %v", err)
+	}
+	if rows[0].ID == "" || rows[0].Domains == nil {
+		t.Fatalf("detail shape: %+v", rows[0])
+	}
+	// domains CRUD
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, stealthReq(http.MethodPost, "/api/v1/domains", `{"domain":"evil.test"}`))
+	if rec2.Code != http.StatusCreated {
+		t.Fatalf("add: %d", rec2.Code)
+	}
+	rec3 := httptest.NewRecorder()
+	h.ServeHTTP(rec3, stealthReq(http.MethodGet, "/api/v1/domains", ""))
+	if rec3.Code != 200 || !strings.Contains(rec3.Body.String(), "evil.test") {
+		t.Fatalf("list: %d %s", rec3.Code, rec3.Body.String())
+	}
+	rec4 := httptest.NewRecorder()
+	h.ServeHTTP(rec4, stealthReq(http.MethodDelete, "/api/v1/domains/evil.test", ""))
+	if rec4.Code != http.StatusNoContent {
+		t.Fatalf("del: %d", rec4.Code)
+	}
+	// без пресетов — 501
+	d2 := testDeps()
+	h2 := Handler(d2)
+	rec5 := httptest.NewRecorder()
+	h2.ServeHTTP(rec5, stealthReq(http.MethodGet, "/api/v1/domains", ""))
+	if rec5.Code != http.StatusNotImplemented {
+		t.Fatalf("no presets: %d", rec5.Code)
+	}
+}

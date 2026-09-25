@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -117,4 +119,38 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// Domain presets — сохраненные домены для выбора из списка (меню).
+func (d *DB) AddDomainPreset(domain string) error {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if !strings.Contains(domain, ".") || strings.ContainsAny(domain, " \t/") {
+		return fmt.Errorf("bad domain %q", domain)
+	}
+	_, err := d.sql.Exec(`INSERT OR IGNORE INTO domain_presets(domain,created_at) VALUES(?,?)`,
+		domain, time.Now().Unix())
+	return err
+}
+
+func (d *DB) ListDomainPresets() ([]string, error) {
+	rows, err := d.sql.Query(`SELECT domain FROM domain_presets ORDER BY domain`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) RemoveDomainPreset(domain string) error {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	_, err := d.sql.Exec(`DELETE FROM domain_presets WHERE domain=?`, domain)
+	return err
 }
