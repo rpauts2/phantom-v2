@@ -16,7 +16,9 @@ import (
 
 // e2e: upstream -> engine -> rewrite + sid + POST без потерь.
 func TestEngineForwardsAndRewrites(t *testing.T) {
+	var gotHost string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHost = r.Host
 		if r.Method == http.MethodPost {
 			b, _ := io.ReadAll(r.Body)
 			if !strings.Contains(string(b), "passwd=secret") {
@@ -74,6 +76,10 @@ func TestEngineForwardsAndRewrites(t *testing.T) {
 	eng.ServeHTTP(rec3, req3)
 	if rec3.Code != 200 {
 		t.Fatalf("POST expected 200, got %d", rec3.Code)
+	}
+	// 4. Апстрим всегда видит Host оригинала (prod и override одинаково).
+	if gotHost != "origin.upstream.test" {
+		t.Fatalf("upstream Host = %q, want origin.upstream.test", gotHost)
 	}
 }
 

