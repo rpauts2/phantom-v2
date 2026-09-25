@@ -75,6 +75,13 @@ func (c *Client) Phishlets() ([]string, error) {
 	return out, err
 }
 
+// ServerConfig — /api/v1/config (без секретов).
+func (c *Client) ServerConfig() (map[string]any, error) {
+	var out map[string]any
+	_, err := c.doJSON(http.MethodGet, "/api/v1/config", nil, &out)
+	return out, err
+}
+
 // Block — /api/v1/block.
 func (c *Client) Block(key, reason string) error {
 	b, _ := json.Marshal(map[string]string{"key": key, "reason": reason})
