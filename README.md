@@ -17,7 +17,26 @@ curl -H "X-Stealth-Host: api-internal.example.com" http://127.0.0.1:8080/dashboa
 # Operator UI в браузере: http://127.0.0.1:8080/ui/dashboard.html
 ```
 
-## Боевой домен: пример reg.ru → Cloudflare (на примере verdebudget.ru)
+## Боевой домен: два варианта (на примере verdebudget.ru)
+
+### Вариант А — напрямую, только DNS reg.ru (быстрый, для тестов)
+1. Панель reg.ru → домен → «Управление DNS-зоной» → добавить A-запись:
+   субдомен `m365`, значение — IP сервера, TTL 300. Повторить для
+   остальных sub (`live`, `msauth`, `msauthimg` по фишлету).
+2. Конфиг Phantom:
+```yaml
+domains: ["verdebudget.ru"]
+tls: {email: "твой@email", dns_provider: "disabled", wildcard: false}
+```
+3. Сертификат: сгенерируется lab self-signed (браузеры ругнутся —
+   для теста жмем «продолжить» / curl с `-k`). Боевой cert — вручную:
+   certbot с ручным TXT (запись добавляешь в той же панели reg.ru),
+   файлы кладешь в `cert_file/key_file`.
+4. Фишлету `base_domains: ["verdebudget.ru"]` → hot-reload (без рестарта).
+5. Плюсы: 5 минут, без третьих сторон. Минусы: поддомены светятся в CT
+   при боевом серте, wildcard только руками, пропагация reg.ru медленнее.
+
+### Вариант B — через Cloudflare (боевой, wildcard автоматом)
 
 Почему Cloudflare: wildcard-сертификат `*.verdebudget.ru` не палит
 поддомены в CT-логах, а DNS управляется через API (наш `dns_provider`).
@@ -29,10 +48,14 @@ curl -H "X-Stealth-Host: api-internal.example.com" http://127.0.0.1:8080/dashboa
    Cloudflare → сохранить. Делегирование: от минут до 24ч.
 
 **Шаг 2. DNS-записи в Cloudflare (режим «DNS only», серое облако!).**
-1. DNS → Records → Add record: Type `A`, Name `m365`, IPv4 — IP сервера,
+1. Проверь статус домена: Home → `verdebudget.ru` → должно быть Active.
+   Вкладка SSL/TLS не важна для серых записей (режим шифрования действует
+   только на оранжевые) — оставь дефолт.
+2. DNS → Records → Add record: Type `A`, Name `m365`, IPv4 — IP сервера,
    Proxy status **OFF (DNS only)**. Оранжевое облако сломает нашу
    TLS-терминацию и отпечатки — для фиш-хоста только серое.
-2. Аналогично для остальных sub (`live`, `msauth`, `msauthimg` по фишлету).
+3. Аналогично для остальных sub (`live`, `msauth`, `msauthimg` по фишлету).
+   Проверка: `nslookup m365.verdebudget.ru` → IP сервера.
 
 **Шаг 3. API-токен для нашего провайдера.**
 1. Cloudflare → My Profile → API Tokens → Create Token → шаблон
