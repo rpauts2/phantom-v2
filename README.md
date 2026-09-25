@@ -28,6 +28,7 @@ curl -H "X-Stealth-Host: api-internal.example.com" http://127.0.0.1:8080/dashboa
 - Behavioral Collector: мышь (count/дистанция), scroll, DOM-тайминг 1.5с, WebGL renderer, скоринг (webdriver/headless + нулевая энтропия)
 - Stealth API + mTLS + Bearer + rate-limit + OpenAPI + `/dashboard` + встроенный Operator UI `/ui` (embed, loopback/stealth-host gate) + CLI deploy (scp+systemd, key-only)
 - Telegram-бот: алерты CREDS/MFA/TOKEN/BLOCKED с кнопками [Drop session] [Block IP] (только метаданные, секретов нет; токен только env `TELEGRAM_BOT_TOKEN`); `SessionDropper` в Memory/Redis/Failover
+- Консольное меню: `phantom -menu` (Bubble Tea: dashboard, фишлеты, block, smart-lure+, reload, generate — поверх stealth API)
 - WS-инспектор: accept/dial, инспекция text-фреймов (токены via:ws), ping/pong keepalive, read-limit 4MB, fallback в raw-туннель для не-WS апстрима
 - AI-генератор фишлетов: `phantom -gen` (эвристики forms/cookies/mfa + Validate) + опциональный LLM-refine (Ollama/OpenAI-совместимый, ключ env) + `POST /api/v1/phishlets/generate`; Hot-Reload без рестарта (`POST .../reload`, `POST .../phishlets` 201, флаг `-watch-phishlets`)
 - Multi-node readiness: `node_id` (hostname/env) в логах, событиях и `captures.node`; сессии shared через общий Redis; паттерн в `specs/multinode.md` (без gossip — stateless ноды)
