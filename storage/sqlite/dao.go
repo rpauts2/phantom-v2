@@ -155,3 +155,33 @@ func (d *DB) RemoveDomainPreset(domain string) error {
 	_, err := d.sql.Exec(`DELETE FROM domain_presets WHERE domain=?`, domain)
 	return err
 }
+
+// CaptureRow — факт захвата для витрины (без plaintext по дизайну).
+type CaptureRow struct {
+	ID        string
+	SessionID string
+	Kind      string
+	Node      string
+	CreatedAt int64
+}
+
+// ListCaptures — последние N фактов, новые сверху.
+func (d *DB) ListCaptures(limit int) ([]CaptureRow, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := d.sql.Query(`SELECT id,session_id,kind,COALESCE(node,''),created_at FROM captures ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CaptureRow
+	for rows.Next() {
+		var r CaptureRow
+		if err := rows.Scan(&r.ID, &r.SessionID, &r.Kind, &r.Node, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

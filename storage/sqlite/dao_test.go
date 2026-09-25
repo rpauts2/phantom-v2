@@ -83,3 +83,24 @@ func TestDomainPresets(t *testing.T) {
 		t.Fatal("remove broken")
 	}
 }
+
+func TestListCaptures(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.InsertCaptureNode("s1", "creds", "eu-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InsertCaptureNode("s1", "mfa:totp", "eu-1"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.ListCaptures(10)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows: %v %v", rows, err)
+	}
+	if rows[0].Node != "eu-1" || rows[0].Kind == "" || rows[0].SessionID != "s1" {
+		t.Fatalf("shape: %+v", rows[0])
+	}
+}

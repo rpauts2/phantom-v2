@@ -387,3 +387,37 @@ func TestCampaignsAPI(t *testing.T) {
 		t.Fatalf("disabled: %d", rec7.Code)
 	}
 }
+
+func TestCheckAndCaptures(t *testing.T) {
+	d := testDeps()
+	d.Caps = func(limit int) ([]map[string]any, error) {
+		return []map[string]any{{"session": "s1", "kind": "creds", "node": "n1"}}, nil
+	}
+	h := Handler(d)
+	// captures
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, stealthReq(http.MethodGet, "/api/v1/captures?limit=5", ""))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "creds") {
+		t.Fatalf("captures: %d %s", rec.Code, rec.Body.String())
+	}
+	// captures без Caps — 501
+	d2 := testDeps()
+	h2 := Handler(d2)
+	rec2 := httptest.NewRecorder()
+	h2.ServeHTTP(rec2, stealthReq(http.MethodGet, "/api/v1/captures", ""))
+	if rec2.Code != http.StatusNotImplemented {
+		t.Fatalf("no caps: %d", rec2.Code)
+	}
+	// check неизвестного — 404
+	rec3 := httptest.NewRecorder()
+	h.ServeHTTP(rec3, stealthReq(http.MethodPost, "/api/v1/phishlets-check/nope", ""))
+	if rec3.Code != http.StatusNotFound {
+		t.Fatalf("unknown check: %d", rec3.Code)
+	}
+	// check GET — 405
+	rec4 := httptest.NewRecorder()
+	h.ServeHTTP(rec4, stealthReq(http.MethodGet, "/api/v1/phishlets-check/labtest", ""))
+	if rec4.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("check method: %d", rec4.Code)
+	}
+}

@@ -302,3 +302,40 @@ func (c *Client) SendCampaign(id, subject, body, urlBase string) (int, error) {
 	_, err := c.doJSON(http.MethodPost, "/api/v1/campaigns/"+id+"/send", strings.NewReader(string(b)), &out)
 	return out["sent"], err
 }
+
+// HostCheck — строка проверки origin-хоста.
+type HostCheck struct {
+	Host   string   `json:"host"`
+	HTTP   int      `json:"http"`
+	Bytes  int      `json:"bytes"`
+	Hits   []string `json:"hits"`
+	Misses []string `json:"misses"`
+	Err    string   `json:"error"`
+}
+
+// CheckPhishlet — POST /api/v1/phishlets-check/{id}.
+func (c *Client) CheckPhishlet(id string) ([]HostCheck, error) {
+	var out []HostCheck
+	_, err := c.doJSON(http.MethodPost, "/api/v1/phishlets-check/"+id, nil, &out)
+	if out == nil {
+		out = []HostCheck{}
+	}
+	return out, err
+}
+
+// CaptureRow — факт захвата для витрины.
+type CaptureRow struct {
+	Session string `json:"session"`
+	Kind    string `json:"kind"`
+	Node    string `json:"node"`
+}
+
+// Captures — GET /api/v1/captures.
+func (c *Client) Captures() ([]CaptureRow, error) {
+	var out []CaptureRow
+	_, err := c.doJSON(http.MethodGet, "/api/v1/captures?limit=20", nil, &out)
+	if out == nil {
+		out = []CaptureRow{}
+	}
+	return out, err
+}

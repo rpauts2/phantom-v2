@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ type Deps struct {
 	NodeID      string               // node_id в stats (мульти-нода)
 	Config      func() map[string]any
 	Presets     DomainPresets
+	Caps        func(limit int) ([]map[string]any, error)
 	Campaigns   any // *campaign.Service (type-assert CampService)
 	PhishDir    string // dir для reload/persist YAML (hot-reload)
 	OnReload    func() error         // Reload стора (main wires store.Reload)
@@ -73,6 +75,7 @@ func Handler(d Deps) http.Handler {
 		}
 	}
 	campRoutes(mux, d, guard)
+	checkRoutes(mux, d, guard)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -148,6 +151,31 @@ func Handler(d Deps) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	// Конфиг сервера для меню (БЕЗ секретов: токены/ключи не отдаем).
+	mux.HandleFunc("/api/v1/captures", guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		if d.Caps == nil {
+			http.Error(w, "captures disabled", http.StatusNotImplemented)
+			return
+		}
+		lim := 50
+		if q := r.URL.Query().Get("limit"); q != "" {
+			if n, err := strconv.Atoi(q); err == nil && n > 0 && n <= 200 {
+				lim = n
+			}
+		}
+		rows, err := d.Caps(lim)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if rows == nil {
+			rows = []map[string]any{}
+		}
+		_ = json.NewEncoder(w).Encode(rows)
+	}))
 	mux.HandleFunc("/api/v1/config", guard(func(w http.ResponseWriter, _ *http.Request) {
 		cfg := map[string]any{"node": d.NodeID}
 		if d.Config != nil {

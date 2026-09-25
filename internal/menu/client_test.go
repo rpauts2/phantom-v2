@@ -35,6 +35,10 @@ func fakeAPI() *httptest.Server {
 			w.WriteHeader(201)
 		case "/api/v1/phishlets/reload":
 			w.WriteHeader(204)
+		case "/api/v1/phishlets-check/a":
+			_, _ = w.Write([]byte(`[{"host":"o.u.test","http":200,"bytes":10,"hits":["x"],"misses":[]}]`))
+		case "/api/v1/captures":
+			_, _ = w.Write([]byte(`[{"session":"sess123456","kind":"creds","node":"n1"}]`))
 		case "/api/v1/campaigns":
 			if r.Method == http.MethodGet {
 				_, _ = w.Write([]byte(`[{"id":"c1","name":"op","phishlet":"a","status":"running","sent":2,"opened":1,"clicked":1,"submitted":0,"total":2}]`))
@@ -150,5 +154,19 @@ func TestPickers(t *testing.T) {
 	}
 	if err := c.RemoveDomain("evil.test"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCheckCapturesClient(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	hc, err := c.CheckPhishlet("a")
+	if err != nil || len(hc) != 1 || hc[0].HTTP != 200 || len(hc[0].Hits) != 1 {
+		t.Fatalf("check: %+v %v", hc, err)
+	}
+	caps, err := c.Captures()
+	if err != nil || len(caps) != 1 || caps[0].Kind != "creds" {
+		t.Fatalf("captures: %+v %v", caps, err)
 	}
 }

