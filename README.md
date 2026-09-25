@@ -17,6 +17,31 @@ curl -H "X-Stealth-Host: api-internal.example.com" http://127.0.0.1:8080/dashboa
 # Operator UI в браузере: http://127.0.0.1:8080/ui/dashboard.html
 ```
 
+## Операторское меню (`phantom -menu`)
+
+Консольный пульт поверх stealth API. Сервер уже запущен, второе окно:
+```sh
+.\phantom.exe -menu -config config.yaml.example -api 127.0.0.1:8080
+```
+Удаленно: `-api IP_СЕРВЕРА:8080` (Bearer из `PHANTOM_API_TOKEN` подхватится сам).
+Клавиши: стрелки — навигация, `Enter` — выбрать/выполнить, `tab` — между полями,
+`esc` — назад, `ctrl+c` — выход (сервер продолжает работать).
+
+1. **Dashboard** — Enter: `node`, число фишлетов, аптайм, список загруженных.
+2. **Phishlets** — Enter: кто в боевом строю (`labtest, microsoft365, google`).
+3. **Smart lure+** — Enter, заполнить поля (`tab` между ними):
+   path `/l/live01`, phishlet id `labtest`, ttl `0`, max uses `1`,
+   bound ip пусто. Enter — `OK / lure создан: /l/live01`.
+4. **Block IP** — Enter: поле IP `8.8.8.8`, причина `test`, Enter — `OK / blocked`.
+5. **Reload** — Enter: `OK / reloaded ok` (стор перечитан без рестарта).
+6. **Generate** — Enter: origin `login.x.com`, domain `p.test`, id `g9`,
+   Enter — превью YAML (первые 12 строк).
+7. **Quit** — выход в шелл.
+
+Проверка снаружи (браузер/curl): открыть созданную приманку —
+первый раз целевой ответ, второй — spoof (одноразовая сгорела);
+забаненный IP всегда видит spoof.
+
 ## Что доделано (весь план + стратегия 2026)
 - Lures/Sessions/Blocklist + Phishlets multidomain + SQLite DAO (lures/smart_lures/sessions/captures/blocklist, рестарт-устойчиво; vault нет по решению)
 - Smart Lures: одноразовые burn, TTL, IP-bind, challenge-gate (__fp_ok), `POST /api/v1/lures`, персист sqlite
