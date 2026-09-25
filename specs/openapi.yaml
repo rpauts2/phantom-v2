@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info: {title: Phantom v2 Stealth API, version: 2.0.0}
+paths:
+  /health: {get: {responses: {'200': {description: ok}}}}
+  /api/v1/stats: {get: {responses: {'200': {description: stats}}}}
+  /api/v1/phishlets: {get: {responses: {'200': {description: ids}}}}
+  /api/v1/phishlets/reload:
+    post: {responses: {'204': {description: reloaded}, '422': {description: bad yaml}}}
+  /api/v1/phishlets/generate:
+    post:
+      requestBody: {content: {application/json: {schema: {type: object, properties: {origin: {type: string}, domain: {type: string}, id: {type: string}, sub: {type: string}, html: {type: string}}}}}}
+      responses: {'200': {description: yaml}}}
+  /api/v1/block:
+    post:
+      requestBody: {content: {application/json: {schema: {type: object, properties: {key: {type: string}, reason: {type: string}}}}}}
+      responses: {'204': {description: blocked}}
+  /api/v1/lures:
+    get: {responses: {'200': {description: lures}}}
+    post:
+      requestBody: {content: {application/json: {schema: {type: object, properties: {path: {type: string}, phishlet_id: {type: string}, ttl_min: {type: integer}, max_uses: {type: integer}, bound_ip: {type: string}, require_challenge: {type: boolean}}}}}}
+      responses: {'201': {description: created}}
+  /dashboard: {get: {responses: {'200': {description: html}}}}
+  /ui/: {get: {responses: {'200': {description: operator UI, loopback or stealth host only}}}}

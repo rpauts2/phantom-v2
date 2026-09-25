@@ -1,0 +1,15 @@
+services:
+  phantom:
+    build: .
+    ports: ["8443:8443", "8080:8080"]
+    volumes:
+      - ./config.yaml.example:/opt/phantom/config.yaml:ro
+      - ./configs/phishlets:/opt/phantom/phishlets:ro
+      - phantom_data:/opt/phantom/data
+    environment:
+      - PHANTOM_REDIS_ADDR=redis:6379
+    depends_on: [redis]
+  redis:
+    image: redis:7-alpine
+    volumes: [redis_data:/data]
+volumes: {phantom_data: {}, redis_data: {}}

