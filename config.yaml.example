@@ -12,6 +12,7 @@ tls:
   email: "ops@example.com"
   dns_provider: "disabled"
   wildcard: false
+  autocert: true # false = только готовые cert_file/key_file, без выпуска
   upstream_tls: "default" # chrome = uTLS HelloChrome+H2 к апстриму (требует H2-апстрим)
 api:
   stealth_hostname: "api-internal.example.com"

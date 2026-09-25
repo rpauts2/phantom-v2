@@ -133,6 +133,8 @@ curl.exe -v -k https://m365.verdebudget.ru:8443/l/m365-01 2>&1 | Select-String "
 - Multi-node readiness: `node_id` (hostname/env) в логах, событиях и `captures.node`; сессии shared через общий Redis; паттерн в `specs/multinode.md` (без gossip — stateless ноды)
 - Боевые фишлеты: `microsoft365`, `google` (+ генератор); `phantom -phishlets-pull <git-url>` для курируемой DB; Windows-служба `deploy\install-service.ps1`; ранбук `OPERATIONS.md`
 - Evilpuppet: Playwright-Chromium фон (`Chain`: Playwright -> HttpTelemetry -> Noop; браузеры: `playwright install chromium`)
+- Захват v2 (лучше Evilginx): regex sub_filters с $1 + `when`-гейты, post-capture JS-redirect (фишлет + per-lure override, чужой Location не трогаем), force_post инжект (form+JSON: silent remember-me), токены из хедеров (via:header)
+- TLS: reuse готовых сертов по expiry, `autocert on/off`, lab self-signed
 - Sessions: Failover dual-write Redis+memory (смерть Redis не теряет сессии), создание пишется в sqlite
 - EventBus persistent (creds/token/mfa -> sqlite, без plaintext) + metrics per-phishlet + detector-as-code (веса унифицированы с botguard) + rate-limit
 - Proxy fidelity: Location/Cookie rewrite (+SameSite/Path), JSON+form creds, sid validate + IP/JA4 bind + Secure, remoteIP/SplitHostPort (IPv6), X-Forwarded-Host fix, WS-туннель с дедлайнами/done-channel, байтовые замены без string-аллокаций

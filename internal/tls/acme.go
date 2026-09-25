@@ -29,16 +29,55 @@ type AutoCert struct {
 	Email    string
 	DNS      core.DNSProvider
 	Lab      bool // true = self-signed для лабы
+	Autocert bool // false = не выпускать: только готовые файлы
+}
+
+// certOK: файл валиден ровно под domain и живет дольше 30 дней.
+func certOK(certFile, domain string) bool {
+	der, err := os.ReadFile(certFile)
+	if err != nil {
+		return false
+	}
+	var cert *x509.Certificate
+	for {
+		var b *pem.Block
+		b, der = pem.Decode(der)
+		if b == nil {
+			break
+		}
+		if b.Type != "CERTIFICATE" {
+			continue
+		}
+		if c, err := x509.ParseCertificate(b.Bytes); err == nil {
+			cert = c
+			break
+		}
+	}
+	if cert == nil {
+		return false
+	}
+	if time.Now().Add(30*24*time.Hour).After(cert.NotAfter) {
+		return false
+	}
+	for _, n := range cert.DNSNames {
+		if n == domain || n == "*."+domain {
+			return true
+		}
+	}
+	return cert.Subject.CommonName == domain || cert.Subject.CommonName == "*."+domain
 }
 
 var _ core.CertManager = AutoCert{}
 
 func (a AutoCert) EnsureWildcard(ctx context.Context, domain string) error {
-	if hasFiles(a.CertFile, a.KeyFile) {
-		return nil
+	if hasFiles(a.CertFile, a.KeyFile) && certOK(a.CertFile, domain) {
+		return nil // готовый валидный серт: переиспользуем, ACME не дергаем
 	}
 	if a.Lab {
 		return selfSignedWildcard(a.CertFile, a.KeyFile, domain)
+	}
+	if !a.Autocert {
+		return fmt.Errorf("autocert off: place valid cert/key for *.%s or enable tls.autocert", domain)
 	}
 	return acmeWildcard(ctx, a, domain)
 }

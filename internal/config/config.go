@@ -33,7 +33,8 @@ type TLS struct {
 	Email       string `yaml:"email"`
 	DNSProvider string `yaml:"dns_provider"`
 	Wildcard    bool   `yaml:"wildcard"`
-	UpstreamTLS string `yaml:"upstream_tls"` // default|chrome (uTLS+H2 к апстриму)
+	UpstreamTLS string `yaml:"upstream_tls"`
+	Autocert    *bool  `yaml:"autocert"`
 }
 
 type API struct {
@@ -114,6 +115,10 @@ func (c *Config) Validate() error {
 	}
 	if c.TLS.UpstreamTLS == "" {
 		c.TLS.UpstreamTLS = "default"
+	}
+	if c.TLS.Autocert == nil {
+		on := true
+		c.TLS.Autocert = &on // дефолт ON: старые конфиги без ключа работают как раньше
 	}
 	switch c.TLS.UpstreamTLS {
 	case "default", "chrome":

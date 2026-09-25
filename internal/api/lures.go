@@ -16,7 +16,8 @@ type SmartLureIn struct {
 	TTLMin           int    `json:"ttl_min"` // 0 = без срока
 	MaxUses          int    `json:"max_uses"`
 	BoundIP          string `json:"bound_ip"`
-	RequireChallenge bool   `json:"require_challenge"`
+	RequireChallenge bool `json:"require_challenge"`
+	RedirectURL      string   `json:"redirect_url"`
 }
 
 // CreateSmartLure валидирует вход, пишет в стор (персист — через тот же стор в main).
@@ -35,5 +36,6 @@ func CreateSmartLure(store core.LureStore, in SmartLureIn) error {	st, ok := sto
 		MaxUses:          in.MaxUses,
 		BoundIP:          in.BoundIP,
 		RequireChallenge: in.RequireChallenge,
+			RedirectURL:      in.RedirectURL,
 	})
 }

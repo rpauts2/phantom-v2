@@ -17,6 +17,8 @@ tls:
   email: "ops@example.com"
   dns_provider: "cloudflare" # cloudflare|route53|gandi|disabled
   wildcard: true
+  autocert: true          # false = только готовые cert/key, выпуска нет
+  upstream_tls: default   # chrome = uTLS HelloChrome+H2
 api:
   stealth_hostname: "api-internal.example.com"
   ca_file: "./certs/ca.pem"

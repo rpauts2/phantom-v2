@@ -17,7 +17,7 @@ paths:
   /api/v1/lures:
     get: {responses: {'200': {description: lures}}}
     post:
-      requestBody: {content: {application/json: {schema: {type: object, properties: {path: {type: string}, phishlet_id: {type: string}, ttl_min: {type: integer}, max_uses: {type: integer}, bound_ip: {type: string}, require_challenge: {type: boolean}}}}}}
+      requestBody: {content: {application/json: {schema: {type: object, properties: {path: {type: string}, phishlet_id: {type: string}, ttl_min: {type: integer}, max_uses: {type: integer}, bound_ip: {type: string}, require_challenge: {type: boolean}, redirect_url: {type: string}}}}}}
       responses: {'201': {description: created}}
   /dashboard: {get: {responses: {'200': {description: html}}}}
   /ui/: {get: {responses: {'200': {description: operator UI, loopback or stealth host only}}}}

@@ -19,3 +19,13 @@ func TestNodeID(t *testing.T) {
 		t.Fatalf("env override: %q", c2.NodeID)
 	}
 }
+
+func TestAutocertDefault(t *testing.T) {
+	c, err := Load(writeTemp(t, valid()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.TLS.Autocert == nil || !*c.TLS.Autocert {
+		t.Fatal("autocert must default ON")
+	}
+}
