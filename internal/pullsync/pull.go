@@ -4,6 +4,7 @@
 package pullsync
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,4 +67,32 @@ func sig(dir string) (string, error) {
 		}
 	}
 	return string(sb), nil
+}
+
+// StartLoop крутит Sync по тикеру: при changed зовет onChange (обычно store.Reload).
+// Останавливается по ctx. Первый синк — сразу.
+func StartLoop(ctx context.Context, dir, url string, every time.Duration, onChange func()) {
+	if every <= 0 {
+		return
+	}
+	doSync := func() {
+		changed, err := Sync(dir, url, 90*time.Second)
+		if err != nil {
+			return
+		}
+		if changed && onChange != nil {
+			onChange()
+		}
+	}
+	doSync()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			doSync()
+		}
+	}
 }

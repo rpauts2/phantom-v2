@@ -114,3 +114,30 @@ func TestSendAllDry(t *testing.T) {
 		t.Fatal("sent not marked")
 	}
 }
+
+func TestReportRender(t *testing.T) {
+	s := NewStore()
+	c := s.Create("op", "m", 0, 1)
+	s.AddTargets(c.ID, []string{"=cmd@x.com", "b@x.com"})
+	rows, ok := s.Report(c.ID)
+	if !ok || len(rows) != 2 {
+		t.Fatalf("report: %+v %v", rows, ok)
+	}
+	if rows[0].Email != "=cmd@x.com" {
+		t.Fatalf("sort: %+v", rows)
+	}
+	csv := RenderCSV(rows)
+	if !strings.Contains(csv, "email,lure,sent") {
+		t.Fatalf("header: %q", csv)
+	}
+	if !strings.Contains(csv, "'=cmd@x.com'") {
+		t.Fatalf("injection guard: %q", csv)
+	}
+	md := RenderMD("op", rows)
+	if !strings.Contains(md, "# Campaign op") || !strings.Contains(md, "b@x.com") {
+		t.Fatalf("md: %q", md)
+	}
+	if _, ok := s.Report("nope"); ok {
+		t.Fatal("unknown must fail")
+	}
+}

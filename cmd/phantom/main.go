@@ -63,6 +63,7 @@ func main() {
 	genLLM := flag.String("gen-llm", "", "optional OpenAI-compatible base URL for refine")
 	genModel := flag.String("gen-model", "llama3", "LLM model for refine")
 	pullURL := flag.String("phishlets-pull", "", "git-sync phishlets DB into -phishlets dir, then continue")
+	pullEvery := flag.String("phishlets-pull-every", "", "repeat git-sync interval, e.g. 1h (empty = once/off)")
 	menuMode := flag.Bool("menu", false, "interactive operator TUI (needs running server + API)")
 	setupMode := flag.Bool("setup", false, "first-run wizard: writes config.yaml")
 	flag.Parse()
@@ -94,12 +95,22 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+	pullEveryDur := time.Duration(0)
 	if *pullURL != "" {
 		changed, err := pullsync.Sync(*phishDir, *pullURL, 90*time.Second)
 		if err != nil {
 			log.Fatalf("phishlets-pull: %v", err)
 		}
 		log.Printf("phishlets-pull: changed=%v dir=%s", changed, *phishDir)
+		if *pullEvery != "" {
+			var err error
+			pullEveryDur, err = time.ParseDuration(*pullEvery)
+			if err != nil || pullEveryDur < time.Minute {
+				log.Fatalf("phishlets-pull-every: bad duration %q (min 1m)", *pullEvery)
+			}
+		}
+	} else if *pullEvery != "" {
+		log.Fatalf("phishlets-pull-every needs -phishlets-pull URL")
 	}
 	st := phishlet.NewStore()
 	if err := st.LoadDir(*phishDir); err != nil {
@@ -361,6 +372,18 @@ func main() {
 	if *watchPhish {
 		go watchDir(ctx, dir, st, refreshLures)
 		log.Printf("watch: hot-reload %s every 15s", dir)
+	}
+	if pullEveryDur > 0 {
+		pullURLv, phishDirv := *pullURL, dir
+		go pullsync.StartLoop(ctx, phishDirv, pullURLv, pullEveryDur, func() {
+			if err := st.Reload(phishDirv); err != nil {
+				log.Printf("pullsync reload: %v", err)
+				return
+			}
+			refreshLures()
+			log.Printf("pullsync: reloaded %s", phishDirv)
+		})
+		log.Printf("phishlets-pull: every %s", pullEveryDur)
 	}
 
 	// Telegram-нотификации: токен только env, чат yaml/env.

@@ -421,3 +421,30 @@ func TestCheckAndCaptures(t *testing.T) {
 		t.Fatalf("check method: %d", rec4.Code)
 	}
 }
+
+func TestCampaignReport(t *testing.T) {
+	d := testDeps()
+	d.Presets = newMemPresets()
+	cs := campaign.NewStore()
+	ls := lures.New()
+	svc := &campaign.Service{Campaigns: cs, Lures: ls, Mail: &mailer.Sender{}}
+	d.Campaigns = svc
+	c := cs.Create("op", "labtest", 0, 1)
+	cs.AddTargets(c.ID, []string{"a@x.com"})
+	h := Handler(d)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, stealthReq(http.MethodGet, "/api/v1/campaigns/"+c.ID+"/report", ""))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "a@x.com") {
+		t.Fatalf("md: %d %s", rec.Code, rec.Body.String())
+	}
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, stealthReq(http.MethodGet, "/api/v1/campaigns/"+c.ID+"/report?format=csv", ""))
+	if rec2.Code != 200 || !strings.Contains(rec2.Body.String(), "email,lure") {
+		t.Fatalf("csv: %d %s", rec2.Code, rec2.Body.String())
+	}
+	rec3 := httptest.NewRecorder()
+	h.ServeHTTP(rec3, stealthReq(http.MethodGet, "/api/v1/campaigns/nope/report", ""))
+	if rec3.Code != http.StatusNotFound {
+		t.Fatalf("unknown: %d", rec3.Code)
+	}
+}

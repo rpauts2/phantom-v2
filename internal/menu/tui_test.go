@@ -307,3 +307,30 @@ func TestQuickFlow(t *testing.T) {
 		t.Fatalf("no url: %s", m.result)
 	}
 }
+
+func TestReportFlow(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	enter := key("enter")
+	m := initialModel(c)
+	m.screen = sMenu
+	for i := 0; i < 15; i++ {
+		nm, _ := m.Update(down)
+		m = nm.(model)
+	}
+	nm, _ := m.Update(enter)
+	m = nm.(model)
+	if m.screen != sPick {
+		t.Fatalf("rep pick: screen=%d", m.screen)
+	}
+	nm, _ = m.Update(enter)
+	m = nm.(model)
+	if m.screen != sResult || m.isErr {
+		t.Fatalf("rep: screen=%d err=%v %s", m.screen, m.isErr, m.result)
+	}
+	if m.result == "" {
+		t.Fatal("empty report")
+	}
+}

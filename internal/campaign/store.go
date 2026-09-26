@@ -5,6 +5,7 @@
 package campaign
 
 import (
+	"sort"
 	"fmt"
 	"strings"
 	"sync"
@@ -298,6 +299,40 @@ func (s *Store) targetsFor(campaignID string) []*Target {
 		}
 	}
 	return out
+}
+
+// Row — строка отчета по цели (без plaintext, только факты и время).
+type Row struct {
+	Email                   string
+	LurePath                string
+	Sent, Opened, Clicked   string
+	Submitted               bool
+}
+
+// Report собирает строки отчета (CSV/Markdown строятся поверх).
+func (s *Store) Report(id string) ([]Row, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.campaigns[id]; !ok {
+		return nil, false
+	}
+	var out []Row
+	for _, t := range s.targetsFor(id) {
+		out = append(out, Row{
+			Email: t.Email, LurePath: t.LurePath,
+			Sent:  fmtTime(t.SentAt), Opened: fmtTime(t.OpenedAt),
+			Clicked: fmtTime(t.ClickedAt), Submitted: t.Submitted,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Email < out[j].Email })
+	return out, true
+}
+
+func fmtTime(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
 // EventsCount — размер истории (мониторинг bound).

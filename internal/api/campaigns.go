@@ -21,6 +21,7 @@ type CampService interface {
 	Get(id string) (*campaign.Campaign, bool)
 	List() []*campaign.Campaign
 	CreateStop(name, phishletID string, ttlMin, maxUses int, stopAt time.Time) *campaign.Campaign
+	Report(id string) ([]campaign.Row, bool)
 }
 
 func campRoutes(mux *http.ServeMux, d Deps, guard func(http.HandlerFunc) http.HandlerFunc) {
@@ -85,6 +86,31 @@ func campRoutes(mux *http.ServeMux, d Deps, guard func(http.HandlerFunc) http.Ha
 		}
 		if id == "" || strings.Contains(id, "/") {
 			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if act == "report" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "method", http.StatusMethodNotAllowed)
+				return
+			}
+			rows, ok := s.Report(id)
+			if !ok {
+				http.Error(w, "unknown campaign", http.StatusNotFound)
+				return
+			}
+			if r.URL.Query().Get("format") == "csv" {
+				w.Header().Set("Content-Type", "text/csv")
+				w.Header().Set("Content-Disposition", "attachment; filename=campaign-"+id+".csv")
+				_, _ = w.Write([]byte(campaign.RenderCSV(rows)))
+				return
+			}
+			c, _ := s.Get(id)
+			name := id
+			if c != nil {
+				name = c.Name
+			}
+			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+			_, _ = w.Write([]byte(campaign.RenderMD(name, rows)))
 			return
 		}
 		if r.Method != http.MethodPost {

@@ -339,3 +339,21 @@ func (c *Client) Captures() ([]CaptureRow, error) {
 	}
 	return out, err
 }
+
+// Report — GET /api/v1/campaigns/{id}/report?format=csv|md.
+func (c *Client) Report(id, format string) (string, error) {
+	r, err := c.req(http.MethodGet, "/api/v1/campaigns/"+id+"/report?format="+format, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.http().Do(r)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("report %d: %s", resp.StatusCode, string(out))
+	}
+	return string(out), nil
+}

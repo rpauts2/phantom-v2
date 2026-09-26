@@ -51,6 +51,7 @@ const (
 	sCampNew
 	sCamps
 	sCaptures
+	sCampRep
 	sServer
 	sQuickPick
 	sResult
@@ -105,6 +106,7 @@ func initialModel(c *Client) model {
 		item{"Captures", "последние захваты", sCaptures},
 		item{"Server", "старт/стоп/логи (одно окно)", sServer},
 		item{"Quick test", "приманка одной кнопкой", sQuickPick},
+		item{"Report", "отчет кампании md", sCampRep},
 		item{"Quit", "выход (сервер продолжает работать)", sMenu},
 	}
 	delegate := list.NewDefaultDelegate()
@@ -534,6 +536,17 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 		return m.showResult(m.pickPhishlet+" → "+sel.title, false), nil
 	case "quicktest":
 		return m.quickCreate(phishID(sel.title))
+	case "camp-rep":
+		id := strings.Fields(sel.title)[0]
+		rep, err := m.client.Report(id, "md")
+		if err != nil {
+			return m.showResult("report: " + err.Error(), true), nil
+		}
+		lines := strings.Split(rep, "\n")
+		if len(lines) > 25 {
+			lines = append(lines[:25], "... (полный — GET /api/v1/campaigns/"+id+"/report?format=csv)")
+		}
+		return m.showResult(strings.Join(lines, "\n"), false), nil
 	case "camp":
 		id := strings.Fields(sel.title)[0]
 		list, err := m.client.ListCampaigns()
@@ -670,6 +683,16 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 				fmt.Fprintf(&b, "%s  %s  %s\n", short(cp.Session), cp.Kind, cp.Node)
 			}
 			return m.showResult(strings.TrimRight(b.String(), "\n"), false), nil
+		case sCampRep:
+			list, err := m.client.ListCampaigns()
+			if err != nil {
+				return m.showResult("campaigns: " + err.Error(), true), nil
+			}
+			items := make([]string, 0, len(list))
+			for _, c := range list {
+				items = append(items, c.ID+" "+c.Name+" ["+c.Status+"]")
+			}
+			return m.openPick("отчет по кампании", "camp-rep", items), nil
 		case sCamps:
 			list, err := m.client.ListCampaigns()
 			if err != nil {

@@ -50,6 +50,8 @@ func fakeAPI() *httptest.Server {
 			_, _ = w.Write([]byte(`{"added":2}`))
 		case "/api/v1/campaigns/c1/launch":
 			_, _ = w.Write([]byte(`{"targets":[{"email":"a@x.com","lure":"/l/x"}]}`))
+		case "/api/v1/campaigns/c1/report":
+			_, _ = w.Write([]byte("# Campaign op\n\n| email |\n"))
 		case "/api/v1/campaigns/c1/send":
 			_, _ = w.Write([]byte(`{"sent":2}`))
 		case "/api/v1/phishlets/generate":

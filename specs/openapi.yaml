@@ -28,6 +28,7 @@ paths:
       responses: {'201': {description: id}}
   /api/v1/campaigns/{id}/targets: {post: {responses: {'200': {description: added}}}}
   /api/v1/campaigns/{id}/launch: {post: {responses: {'200': {description: lures}}}}
+  /api/v1/campaigns/{id}/report: {get: {responses: {'200': {description: md|csv}}}}
   /api/v1/campaigns/{id}/send: {post: {responses: {'200': {description: sent}}}}
   /api/v1/captures: {get: {responses: {'200': {description: facts}}}}
   /api/v1/phishlets-check/{id}: {post: {responses: {'200': {description: host checks}}}}

