@@ -1,6 +1,7 @@
 package menu
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -266,5 +267,43 @@ func TestReloadPickKinds(t *testing.T) {
 	m = nm.(model)
 	if m.screen != sPick || m.pickKind != "camp" {
 		t.Fatalf("camp refresh: screen=%d kind=%s", m.screen, m.pickKind)
+	}
+}
+
+func TestServerScreen(t *testing.T) {
+	m := initialModel(&Client{Base: "http://127.0.0.1:1", Stealth: "x"})
+	m.screen = sServer
+	m.result = "сервер: down"
+	nm, _ := m.Update(key("l"))
+	m = nm.(model)
+	if m.screen != sResult {
+		t.Fatalf("logs: screen=%d", m.screen)
+	}
+}
+
+func TestQuickFlow(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	enter := key("enter")
+	m := initialModel(c)
+	m.screen = sMenu
+	for i := 0; i < 14; i++ {
+		nm, _ := m.Update(down)
+		m = nm.(model)
+	}
+	nm, _ := m.Update(enter)
+	m = nm.(model)
+	if m.screen != sPick {
+		t.Fatalf("quick pick: screen=%d", m.screen)
+	}
+	nm, _ = m.Update(enter)
+	m = nm.(model)
+	if m.screen != sResult || m.isErr {
+		t.Fatalf("quick create: screen=%d err=%v %s", m.screen, m.isErr, m.result)
+	}
+	if !strings.Contains(m.result, "https://") {
+		t.Fatalf("no url: %s", m.result)
 	}
 }

