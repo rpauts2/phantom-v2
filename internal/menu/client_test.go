@@ -121,7 +121,7 @@ func TestCampClient(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Total != 2 {
 		t.Fatalf("camps: %+v %v", list, err)
 	}
-	id, err := c.CreateCampaign("op", "a", 60, 1)
+	id, err := c.CreateCampaign("op", "a", 60, 1, 0)
 	if err != nil || id != "c1" {
 		t.Fatalf("create: %q %v", id, err)
 	}

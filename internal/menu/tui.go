@@ -681,9 +681,9 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 			}
 			return m.openPick("кампании", "camp", items), nil
 		case sCampNew:
-			m.inputs, m.labels = mkInputs(
-				[]string{"название", "phishlet id", "emails через запятую", "subject", "body html", "url_base", "ttl мин"},
-				[]string{"", "", "", "", "", "", "10080"})
+		m.inputs, m.labels = mkInputs(
+				[]string{"название", "phishlet id", "emails через запятую", "subject", "body html", "url_base", "ttl мин", "стоп через дней (0=∞)"},
+				[]string{"", "", "", "", "", "", "10080", "0"})
 			m.focus = 0
 		case sDomains:
 			doms, err := m.client.ListDomains()
@@ -725,7 +725,11 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		if m.inputs[0].Value() == "" || m.inputs[1].Value() == "" || len(emails) == 0 {
 			return m.showResult("нужны название, фишлет и emails", true), nil
 		}
-		id, err := m.client.CreateCampaign(m.inputs[0].Value(), m.inputs[1].Value(), atoi(m.inputs[6].Value()), 1)
+		var endsAt int64
+		if days := atoi(m.inputs[7].Value()); days > 0 {
+			endsAt = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
+		}
+		id, err := m.client.CreateCampaign(m.inputs[0].Value(), m.inputs[1].Value(), atoi(m.inputs[6].Value()), 1, endsAt)
 		if err != nil {
 			return m.showResult("create: " + err.Error(), true), nil
 		}

@@ -179,6 +179,9 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ip := remoteIP(r)
 	if e.limit != nil && !e.limit.Allow(ip) {
+		if rl, ok := e.limit.(interface{ RetryAfter(string) int64 }); ok {
+			w.Header().Set("Retry-After", strconv.FormatInt(rl.RetryAfter(ip), 10))
+		}
 		http.Error(w, "rate limited", http.StatusTooManyRequests)
 		return
 	}

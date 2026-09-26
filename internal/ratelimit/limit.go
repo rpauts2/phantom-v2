@@ -41,3 +41,29 @@ func (f *Fixed) Allow(ip string) bool {
 	f.hits[ip] = append(fresh, now)
 	return true
 }
+
+// RetryAfter — секунд до освобождения окна (для Retry-After заголовка).
+func (f *Fixed) RetryAfter(ip string) int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	hs := f.hits[ip]
+	if len(hs) == 0 {
+		return 0
+	}
+	oldest := hs[0]
+	for _, t := range hs[1:] {
+		if t.Before(oldest) {
+			oldest = t
+		}
+	}
+	left := f.window - time.Since(oldest)
+	if left <= 0 {
+		return 0
+	}
+	return int64(left/time.Second) + 1
+}
+
+// Window возвращает окно (для заголовков).
+func (f *Fixed) Window() time.Duration {
+	return f.window
+}

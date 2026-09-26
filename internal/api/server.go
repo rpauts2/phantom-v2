@@ -62,6 +62,9 @@ func Handler(d Deps) http.Handler {
 				return
 			}
 			if d.Limit != nil && !d.Limit.Allow(clientIP(r)) {
+				if rl, ok := d.Limit.(interface{ RetryAfter(string) int64 }); ok {
+					w.Header().Set("Retry-After", strconv.FormatInt(rl.RetryAfter(clientIP(r)), 10))
+				}
 				http.Error(w, "rate limited", http.StatusTooManyRequests)
 				return
 			}

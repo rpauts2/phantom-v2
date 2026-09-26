@@ -54,3 +54,18 @@ func TestSmartLures(t *testing.T) {
 		t.Fatal("unknown must fail")
 	}
 }
+
+func TestOnUseCallback(t *testing.T) {
+	s := New()
+	var got []string
+	s.OnUse = func(path string, uses int) { got = append(got, path) }
+	if err := s.SmartCreate(Smart{Path: "/l/u", PhishletID: "m1", MaxUses: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.ResolveSmart("/l/u", "1.1.1.1", false); !ok {
+		t.Fatal("resolve")
+	}
+	if len(got) != 1 || got[0] != "/l/u" {
+		t.Fatalf("callback: %v", got)
+	}
+}

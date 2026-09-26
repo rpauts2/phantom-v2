@@ -2,6 +2,7 @@
 package api
 
 import (
+	"time"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ type CampService interface {
 	Stats(id string) (sent, opened, clicked, submitted, total int)
 	Get(id string) (*campaign.Campaign, bool)
 	List() []*campaign.Campaign
+	CreateStop(name, phishletID string, ttlMin, maxUses int, stopAt time.Time) *campaign.Campaign
 }
 
 func campRoutes(mux *http.ServeMux, d Deps, guard func(http.HandlerFunc) http.HandlerFunc) {
@@ -52,12 +54,17 @@ func campRoutes(mux *http.ServeMux, d Deps, guard func(http.HandlerFunc) http.Ha
 				PhishletID string `json:"phishlet_id"`
 				TTLMin     int    `json:"ttl_min"`
 				MaxUses    int    `json:"max_uses"`
+				EndsAt     int64  `json:"ends_at"`
 			}
 			if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&in); err != nil || in.Name == "" || in.PhishletID == "" {
 				http.Error(w, "need name, phishlet_id", http.StatusBadRequest)
 				return
 			}
-			c := s.Create(in.Name, in.PhishletID, in.TTLMin, in.MaxUses)
+			var stop time.Time
+			if in.EndsAt > 0 {
+				stop = time.Unix(in.EndsAt, 0)
+			}
+			c := s.CreateStop(in.Name, in.PhishletID, in.TTLMin, in.MaxUses, stop)
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]string{"id": c.ID})
 		default:

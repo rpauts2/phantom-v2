@@ -264,9 +264,9 @@ func (c *Client) ListCampaigns() ([]CampInfo, error) {
 	return out, err
 }
 
-// CreateCampaign — POST -> id.
-func (c *Client) CreateCampaign(name, phishlet string, ttlMin, maxUses int) (string, error) {
-	b, _ := json.Marshal(map[string]any{"name": name, "phishlet_id": phishlet, "ttl_min": ttlMin, "max_uses": maxUses})
+// CreateCampaign — POST -> id. endsAt unix, 0 = бессрочно.
+func (c *Client) CreateCampaign(name, phishlet string, ttlMin, maxUses int, endsAt int64) (string, error) {
+	b, _ := json.Marshal(map[string]any{"name": name, "phishlet_id": phishlet, "ttl_min": ttlMin, "max_uses": maxUses, "ends_at": endsAt})
 	var out map[string]string
 	code, err := c.doJSON(http.MethodPost, "/api/v1/campaigns", strings.NewReader(string(b)), &out)
 	if err != nil {

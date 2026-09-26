@@ -104,3 +104,21 @@ func TestListCaptures(t *testing.T) {
 		t.Fatalf("shape: %+v", rows[0])
 	}
 }
+
+func TestIncSmartUse(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.UpsertSmartLure(SmartLureRow{Path: "/l/u", PhishletID: "m", MaxUses: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.IncSmartUse("/l/u"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.ListSmartLures()
+	if err != nil || len(rows) != 1 || rows[0].Uses != 1 {
+		t.Fatalf("uses: %+v %v", rows, err)
+	}
+}

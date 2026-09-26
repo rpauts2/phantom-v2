@@ -30,6 +30,7 @@ type Campaign struct {
 	MaxUses    int // 1 = одноразовые (дефолт)
 	Status     string
 	CreatedAt  time.Time
+	StopAt     time.Time // dead man's switch: zero = бессрочно
 }
 
 // Target — получатель с персональной приманкой.
@@ -56,7 +57,19 @@ type Event struct {
 // Методы best-effort: ошибка уходит в OnError, поток не рвется.
 type Persister interface {
 	UpsertCampaign(id, name, phishletID, status string, ttlMin, maxUses int, createdAt int64) error
+	UpsertCampaignStop(id, name, phishletID, status string, ttlMin, maxUses int, createdAt, stopAt int64) error
 	UpsertTarget(id, campaignID, email, lure string, sent, opened, clicked, submitted bool) error
+}
+
+// persistCamp пишет кампанию вместе со StopAt.
+func (s *Store) persistCamp(c *Campaign) {
+	var stop int64
+	if !c.StopAt.IsZero() {
+		stop = c.StopAt.Unix()
+	}
+	s.persist(func() error {
+		return s.DB.UpsertCampaignStop(c.ID, c.Name, c.PhishletID, c.Status, c.TTLMin, c.MaxUses, c.CreatedAt.Unix(), stop)
+	})
 }
 
 // maxEvents — потолок истории событий (память долгоживущего процесса).
@@ -105,6 +118,11 @@ func NewStore() *Store {
 
 // Create черновик.
 func (s *Store) Create(name, phishletID string, ttlMin, maxUses int) *Campaign {
+	return s.CreateStop(name, phishletID, ttlMin, maxUses, time.Time{})
+}
+
+// CreateStop черновик с дедлайном авто-стопа.
+func (s *Store) CreateStop(name, phishletID string, ttlMin, maxUses int, stopAt time.Time) *Campaign {
 	if maxUses <= 0 {
 		maxUses = 1
 	}
@@ -113,13 +131,12 @@ func (s *Store) Create(name, phishletID string, ttlMin, maxUses int) *Campaign {
 		LureBase: "/l/" + strings.ToLower(slug(name)) + "-",
 		TTLMin: ttlMin, MaxUses: maxUses,
 		Status: StatusDraft, CreatedAt: time.Now(),
+		StopAt: stopAt,
 	}
 	s.mu.Lock()
 	s.campaigns[c.ID] = c
 	s.mu.Unlock()
-	s.persist(func() error {
-		return s.DB.UpsertCampaign(c.ID, c.Name, c.PhishletID, c.Status, c.TTLMin, c.MaxUses, c.CreatedAt.Unix())
-	})
+	s.persistCamp(c)
 	return c
 }
 
@@ -161,6 +178,22 @@ func (s *Store) AddTargets(campaignID string, emails []string) int {
 	return n
 }
 
+// sweepExpired гасит running-кампании с прошедшим StopAt. Вызывается
+// лениво из List/Stats (без фоновых горутин) + явно из API.
+func (s *Store) sweepExpired() []string {
+	now := time.Now()
+	var stopped []string
+	for id, c := range s.campaigns {
+		if c.Status == StatusRunning && !c.StopAt.IsZero() && !now.Before(c.StopAt) {
+			c.Status = StatusDone
+			stopped = append(stopped, id)
+			cc := *c
+			s.persistCamp(&cc)
+		}
+	}
+	return stopped
+}
+
 // Launch переводит в running, возвращает цели для рассылки.
 func (s *Store) Launch(campaignID string) ([]*Target, error) {
 	s.mu.Lock()
@@ -172,13 +205,15 @@ func (s *Store) Launch(campaignID string) ([]*Target, error) {
 	if c.Status != StatusDraft {
 		return nil, fmt.Errorf("already %s", c.Status)
 	}
+	s.sweepExpired()
+	if !c.StopAt.IsZero() && !time.Now().Before(c.StopAt) {
+		return nil, fmt.Errorf("deadline passed")
+	}
 	if len(s.targetsFor(campaignID)) == 0 {
 		return nil, fmt.Errorf("no targets")
 	}
 	c.Status = StatusRunning
-	s.persist(func() error {
-		return s.DB.UpsertCampaign(c.ID, c.Name, c.PhishletID, c.Status, c.TTLMin, c.MaxUses, c.CreatedAt.Unix())
-	})
+	s.persistCamp(c)
 	return s.targetsFor(campaignID), nil
 }
 
@@ -280,6 +315,9 @@ func (s *Store) Get(id string) (*Campaign, bool) {
 }
 
 func (s *Store) List() []*Campaign {
+	s.mu.Lock()
+	s.sweepExpired()
+	s.mu.Unlock()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*Campaign, 0, len(s.campaigns))

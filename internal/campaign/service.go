@@ -49,8 +49,12 @@ func (s *Service) Launch(id string) ([]*Target, error) {
 // SendAll рассылает письма с персональными URL + пиксель open.
 // urlBase вида https://m365.evil.example.com (без слэша на конце).
 func (s *Service) SendAll(id, subject, body, urlBase string) (int, error) {
-	if _, ok := s.Campaigns.Get(id); !ok {
+	c, ok := s.Campaigns.Get(id)
+	if !ok {
 		return 0, fmt.Errorf("unknown campaign")
+	}
+	if c.Status != StatusRunning {
+		return 0, fmt.Errorf("campaign %s (need running)", c.Status)
 	}
 	sent := 0
 	for _, t := range s.Campaigns.Targets(id) {
@@ -131,6 +135,10 @@ func (s *Service) Watch(ctx context.Context, sub Subscriber) {
 // Делегирование store для API-слоя (CampService).
 func (s *Service) Create(name, phishletID string, ttlMin, maxUses int) *Campaign {
 	return s.Campaigns.Create(name, phishletID, ttlMin, maxUses)
+}
+
+func (s *Service) CreateStop(name, phishletID string, ttlMin, maxUses int, stopAt time.Time) *Campaign {
+	return s.Campaigns.CreateStop(name, phishletID, ttlMin, maxUses, stopAt)
 }
 
 func (s *Service) AddTargets(campaignID string, emails []string) int {

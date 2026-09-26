@@ -1,6 +1,12 @@
 package campaign
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/phantom-v2/phantom/internal/lures"
+	"github.com/phantom-v2/phantom/internal/mailer"
+)
 
 func TestLifecycle(t *testing.T) {
 	s := NewStore()
@@ -57,6 +63,11 @@ func (f *fakePersist) UpsertCampaign(id, name, phishletID, status string, ttlMin
 	return nil
 }
 
+func (f *fakePersist) UpsertCampaignStop(id, name, phishletID, status string, ttlMin, maxUses int, createdAt, stopAt int64) error {
+	f.camps++
+	return nil
+}
+
 func (f *fakePersist) UpsertTarget(id, campaignID, email, lure string, sent, opened, clicked, submitted bool) error {
 	f.tgts++
 	return nil
@@ -95,5 +106,31 @@ func TestPersistAndTrim(t *testing.T) {
 	}
 	if _, ok := s2.TargetByLure("/l/z"); !ok {
 		t.Fatal("restore target")
+	}
+}
+
+func TestDeadMansSwitch(t *testing.T) {
+	s := NewStore()
+	past := s.CreateStop("old", "m", 0, 1, time.Now().Add(-time.Minute))
+	s.AddTargets(past.ID, []string{"a@x.com"})
+	if _, err := s.Launch(past.ID); err == nil {
+		t.Fatal("past deadline must refuse launch")
+	}
+	fut := s.CreateStop("new", "m", 0, 1, time.Now().Add(time.Hour))
+	s.AddTargets(fut.ID, []string{"b@x.com"})
+	if _, err := s.Launch(fut.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	fut.Status = StatusRunning
+	fut.StopAt = time.Now().Add(-time.Second)
+	s.mu.Unlock()
+	_ = s.List()
+	if got, _ := s.Get(fut.ID); got.Status != StatusDone {
+		t.Fatalf("not stopped: %s", got.Status)
+	}
+	svc := &Service{Campaigns: s, Lures: lures.New(), Mail: &mailer.Sender{}}
+	if _, err := svc.SendAll(fut.ID, "s", "b", "https://m.test"); err == nil {
+		t.Fatal("send to done must fail")
 	}
 }
