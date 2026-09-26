@@ -125,6 +125,31 @@ func (s *Store) ResolveSmart(path, ip string, fpOK bool) (string, bool) {
 	return pid, true
 }
 
+// ChallengeRequired: приманка существует и ждет только challenge.
+// Используется движком чтобы отдать interstitial вместо spoof:
+// человек с JS проходит за пару секунд, бот — нет.
+func (s *Store) ChallengeRequired(path, ip string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.m[path]; ok {
+		return false
+	}
+	sm, ok := s.smart[path]
+	if !ok || !sm.RequireChallenge {
+		return false
+	}
+	if !sm.ExpiresAt.IsZero() && time.Now().After(sm.ExpiresAt) {
+		return false
+	}
+	if sm.MaxUses > 0 && sm.Uses >= sm.MaxUses {
+		return false
+	}
+	if sm.BoundIP != "" && sm.BoundIP != ip {
+		return false
+	}
+	return true
+}
+
 // ListSmart — снапшот для API/персистентности.
 func (s *Store) ListSmart() []Smart {
 	s.mu.RLock()

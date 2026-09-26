@@ -457,11 +457,17 @@ func (m model) quickCreate(id string) (tea.Model, tea.Cmd) {
 	if domain == "" {
 		return m.showResult("нет домена у " + id, true), nil
 	}
+	port := ""
+	if cfg, err := m.client.ServerConfig(); err == nil {
+		if p, ok := cfg["https_port"].(float64); ok && p != 443 {
+			port = fmt.Sprintf(":%d", int(p))
+		}
+	}
 	path := "/l/qt-" + randSuffix()
 	if err := m.client.SmartLure(path, id, 60, 1, "", false); err != nil {
 		return m.showResult("lure: " + err.Error(), true), nil
 	}
-	return m.showResult("открой в браузере:\nhttps://" + domain + ":8443" + path + "\n(в проде без :8443)", false), nil
+	return m.showResult("открой в браузере:\nhttps://" + domain + port + path + "", false), nil
 }
 
 // pickEnter — выбор в пикере по kind.

