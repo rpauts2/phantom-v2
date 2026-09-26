@@ -212,6 +212,36 @@ func main() {
 
 	// Кампании: per-target приманки + трекинг + рассылка (SMTP только env).
 	campStore := campaign.NewStore()
+	campStore.DB = sqlDB
+	campStore.OnError = func(err error) { log.Printf("node=%s sqlite camp: %v", cfg.NodeID, err) }
+	if camps, tgts, err := sqlDB.ListCampaigns(); err != nil {
+		log.Printf("node=%s sqlite campaigns: %v", cfg.NodeID, err)
+	} else {
+		byCamp := map[string][]campaign.Target{}
+		for _, t := range tgts {
+			var z campaign.Target
+			z.ID, z.CampaignID, z.Email, z.LurePath = t.ID, t.CampaignID, t.Email, t.Lure
+			if t.Sent {
+				z.SentAt = time.Now()
+			}
+			if t.Opened {
+				z.OpenedAt = time.Now()
+			}
+			if t.Clicked {
+				z.ClickedAt = time.Now()
+			}
+			z.Submitted = t.Submitted
+			byCamp[t.CampaignID] = append(byCamp[t.CampaignID], z)
+		}
+		for _, c := range camps {
+			campStore.Restore(campaign.Campaign{
+				ID: c.ID, Name: c.Name, PhishletID: c.PhishletID,
+				TTLMin: c.TTLMin, MaxUses: c.MaxUses, Status: c.Status,
+				CreatedAt: time.Unix(c.CreatedAt, 0),
+			}, byCamp[c.ID])
+		}
+		log.Printf("node=%s campaigns restored: %d", cfg.NodeID, len(camps))
+	}
 	smtpPort, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	mailCfg := mailer.Config{
 		Host: os.Getenv("SMTP_HOST"), Port: smtpPort,

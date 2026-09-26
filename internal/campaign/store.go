@@ -52,6 +52,16 @@ type Event struct {
 	At         time.Time
 }
 
+// Persister — sqlite-персист (реализация *sqlite.DB, wire в main).
+// Методы best-effort: ошибка уходит в OnError, поток не рвется.
+type Persister interface {
+	UpsertCampaign(id, name, phishletID, status string, ttlMin, maxUses int, createdAt int64) error
+	UpsertTarget(id, campaignID, email, lure string, sent, opened, clicked, submitted bool) error
+}
+
+// maxEvents — потолок истории событий (память долгоживущего процесса).
+const maxEvents = 10000
+
 // Store — in-memory + персист через DAO (sqlite, wire в main).
 type Store struct {
 	mu        sync.RWMutex
@@ -59,6 +69,30 @@ type Store struct {
 	targets   map[string]*Target
 	byLure    map[string]string // lurePath -> targetID
 	events    []Event
+	DB        Persister
+	OnError   func(error)
+}
+
+func (s *Store) persist(fn func() error) {
+	if s.DB == nil {
+		return
+	}
+	if err := fn(); err != nil && s.OnError != nil {
+		s.OnError(err)
+	}
+}
+
+// Restore загружает кампанию+цели из персиста (старт сервера).
+func (s *Store) Restore(c Campaign, targets []Target) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := c
+	s.campaigns[c.ID] = &cp
+	for _, t := range targets {
+		tt := t
+		s.targets[t.ID] = &tt
+		s.byLure[t.LurePath] = t.ID
+	}
 }
 
 func NewStore() *Store {
@@ -83,6 +117,9 @@ func (s *Store) Create(name, phishletID string, ttlMin, maxUses int) *Campaign {
 	s.mu.Lock()
 	s.campaigns[c.ID] = c
 	s.mu.Unlock()
+	s.persist(func() error {
+		return s.DB.UpsertCampaign(c.ID, c.Name, c.PhishletID, c.Status, c.TTLMin, c.MaxUses, c.CreatedAt.Unix())
+	})
 	return c
 }
 
@@ -116,6 +153,10 @@ func (s *Store) AddTargets(campaignID string, emails []string) int {
 		s.targets[id] = t
 		s.byLure[path] = id
 		n++
+		pp := *t
+		s.persist(func() error {
+			return s.DB.UpsertTarget(pp.ID, pp.CampaignID, pp.Email, pp.LurePath, false, false, false, false)
+		})
 	}
 	return n
 }
@@ -135,6 +176,9 @@ func (s *Store) Launch(campaignID string) ([]*Target, error) {
 		return nil, fmt.Errorf("no targets")
 	}
 	c.Status = StatusRunning
+	s.persist(func() error {
+		return s.DB.UpsertCampaign(c.ID, c.Name, c.PhishletID, c.Status, c.TTLMin, c.MaxUses, c.CreatedAt.Unix())
+	})
 	return s.targetsFor(campaignID), nil
 }
 
@@ -164,6 +208,14 @@ func (s *Store) Mark(targetID, kind string) {
 		return
 	}
 	s.events = append(s.events, Event{kind, targetID, t.CampaignID, now})
+	if len(s.events) > maxEvents {
+		s.events = append([]Event(nil), s.events[len(s.events)-maxEvents:]...)
+	}
+	tt := *t
+	s.persist(func() error {
+		return s.DB.UpsertTarget(tt.ID, tt.CampaignID, tt.Email, tt.LurePath,
+			!tt.SentAt.IsZero(), !tt.OpenedAt.IsZero(), !tt.ClickedAt.IsZero(), tt.Submitted)
+	})
 }
 
 // TargetByLure — резолюция персональной приманки.
@@ -211,6 +263,13 @@ func (s *Store) targetsFor(campaignID string) []*Target {
 		}
 	}
 	return out
+}
+
+// EventsCount — размер истории (мониторинг bound).
+func (s *Store) EventsCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.events)
 }
 
 func (s *Store) Get(id string) (*Campaign, bool) {

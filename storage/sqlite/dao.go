@@ -185,3 +185,64 @@ func (d *DB) ListCaptures(limit int) ([]CaptureRow, error) {
 	}
 	return out, rows.Err()
 }
+
+// Campaign persistence (без plaintext: только факты и счетчики).
+func (d *DB) UpsertCampaign(id, name, phishletID, status string, ttlMin, maxUses int, createdAt int64) error {
+	_, err := d.sql.Exec(`INSERT INTO campaigns(id,name,phishlet_id,ttl_min,max_uses,status,created_at)
+VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status`,
+		id, name, phishletID, ttlMin, maxUses, status, createdAt)
+	return err
+}
+
+func (d *DB) UpsertTarget(id, campaignID, email, lure string, sent, opened, clicked, submitted bool) error {
+	_, err := d.sql.Exec(`INSERT INTO targets(id,campaign_id,email,lure,sent,opened,clicked,submitted)
+VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET sent=excluded.sent,opened=excluded.opened,clicked=excluded.clicked,submitted=excluded.submitted`,
+		id, campaignID, email, lure, boolInt(sent), boolInt(opened), boolInt(clicked), boolInt(submitted))
+	return err
+}
+
+type CampaignRow struct {
+	ID, Name, PhishletID, Status string
+	TTLMin, MaxUses               int
+	CreatedAt                     int64
+}
+
+type TargetRow struct {
+	ID, CampaignID, Email, Lure string
+	Sent, Opened, Clicked, Submitted bool
+}
+
+func (d *DB) ListCampaigns() ([]CampaignRow, []TargetRow, error) {
+	rows, err := d.sql.Query(`SELECT id,name,phishlet_id,ttl_min,max_uses,status,created_at FROM campaigns`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var camps []CampaignRow
+	for rows.Next() {
+		var c CampaignRow
+		if err := rows.Scan(&c.ID, &c.Name, &c.PhishletID, &c.TTLMin, &c.MaxUses, &c.Status, &c.CreatedAt); err != nil {
+			return nil, nil, err
+		}
+		camps = append(camps, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	rows2, err := d.sql.Query(`SELECT id,campaign_id,email,lure,sent,opened,clicked,submitted FROM targets`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows2.Close()
+	var tgts []TargetRow
+	for rows2.Next() {
+		var t TargetRow
+		var s, o, c2, sb int
+		if err := rows2.Scan(&t.ID, &t.CampaignID, &t.Email, &t.Lure, &s, &o, &c2, &sb); err != nil {
+			return nil, nil, err
+		}
+		t.Sent, t.Opened, t.Clicked, t.Submitted = s != 0, o != 0, c2 != 0, sb != 0
+		tgts = append(tgts, t)
+	}
+	return camps, tgts, rows2.Err()
+}

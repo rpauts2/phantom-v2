@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"time"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -253,4 +254,51 @@ func getWith(t *testing.T, eng *Engine, path, sid string) (string, string) {
 	rec := httptest.NewRecorder()
 	eng.ServeHTTP(rec, req)
 	return sid, rec.Body.String()
+}
+
+func TestCapTTL(t *testing.T) {
+	st := customStore(t, baseYML)
+	eng := New(st, nil, nil)
+	eng.SetCapTTL(time.Minute)
+	eng.markCaptured("s1")
+	if !eng.isCaptured("s1") {
+		t.Fatal("must be captured")
+	}
+	if n := eng.CapCount(); n != 1 {
+		t.Fatalf("count=%d", n)
+	}
+	eng.SetCapTTL(time.Nanosecond)
+	time.Sleep(5 * time.Millisecond)
+	if eng.isCaptured("s1") {
+		t.Fatal("must expire")
+	}
+	if n := eng.CapCount(); n != 0 {
+		t.Fatalf("lazy delete failed: %d", n)
+	}
+
+	// sweep: 128 distinct-ключей с протухшим ttl схлопываются в 1
+	eng2 := New(st, nil, nil)
+	eng2.SetCapTTL(time.Nanosecond)
+	for i := 0; i < 127; i++ {
+		eng2.markCaptured("k" + itoa(i))
+	}
+	time.Sleep(2 * time.Millisecond)
+	eng2.markCaptured("last")
+	if n := eng2.CapCount(); n != 1 {
+		t.Fatalf("sweep failed: %d", n)
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [16]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
 }
