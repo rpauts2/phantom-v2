@@ -11,24 +11,24 @@ import (
 )
 
 type Config struct {
-	Bind      string   `yaml:"bind"`
-	HTTPSPort int      `yaml:"https_port"`
-	Shared443 bool     `yaml:"shared_443"`
-	NodeID    string   `yaml:"node_id"`
-	SessCookie string  `yaml:"session_cookie"`
-	ChallPath  string  `yaml:"challenge_path"`
-	Domains   []string `yaml:"domains"`
-	Storage   Storage  `yaml:"storage"`
-	TLS       TLS      `yaml:"tls"`
-	API       API      `yaml:"api"`
-	Notify    Notify   `yaml:"notifications"`
-	LogLevel  string   `yaml:"log_level"`
+	Bind       string   `yaml:"bind"`
+	HTTPSPort  int      `yaml:"https_port"`
+	Shared443  bool     `yaml:"shared_443"`
+	NodeID     string   `yaml:"node_id"`
+	SessCookie string   `yaml:"session_cookie"`
+	ChallPath  string   `yaml:"challenge_path"`
+	Domains    []string `yaml:"domains"`
+	Storage    Storage  `yaml:"storage"`
+	TLS        TLS      `yaml:"tls"`
+	API        API      `yaml:"api"`
+	Notify     Notify   `yaml:"notifications"`
+	LogLevel   string   `yaml:"log_level"`
 }
 
 type Storage struct {
-	SQLitePath   string `yaml:"sqlite_path"`
-	RedisAddr    string `yaml:"redis_addr"`
-	SessionTTLMin int   `yaml:"session_ttl_min"`
+	SQLitePath    string `yaml:"sqlite_path"`
+	RedisAddr     string `yaml:"redis_addr"`
+	SessionTTLMin int    `yaml:"session_ttl_min"`
 }
 
 type TLS struct {

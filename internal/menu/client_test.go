@@ -62,7 +62,7 @@ func fakeAPI() *httptest.Server {
 				return
 			}
 			w.WriteHeader(404)
-		// DELETE /api/v1/domains/{d} — выше нет exact-case, ловим тут
+			// DELETE /api/v1/domains/{d} — выше нет exact-case, ловим тут
 		}
 	}))
 }

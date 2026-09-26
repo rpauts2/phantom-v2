@@ -9,16 +9,16 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
-	"time"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/phantom-v2/phantom/internal/supervise"
+	"time"
 )
 
 var (
 	bannerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99")).
-		Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("99")).
-		Padding(0, 1)
+			Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("99")).
+			Padding(0, 1)
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63")).
 			Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).
 			Padding(0, 1)
@@ -58,13 +58,13 @@ const (
 )
 
 type statusMsg struct {
-	err error
+	err  error
 	node string
 }
 
 type item struct {
 	title, desc string
-	goes  screen
+	goes        screen
 }
 
 func (i item) Title() string       { return i.title }
@@ -72,21 +72,21 @@ func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
 type model struct {
-	client *Client
-	screen screen
-	conn   string
-	pickTitle string
-	pickList list.Model
-	pickKind string
+	client       *Client
+	screen       screen
+	conn         string
+	pickTitle    string
+	pickList     list.Model
+	pickKind     string
 	pickPhishlet string
-	pickEnabled bool
-	loc         Local // "node=..." или текст ошибки
-	list   list.Model
-	inputs []textinput.Model
-	labels []string
-	focus  int
-	result string
-	isErr  bool
+	pickEnabled  bool
+	loc          Local // "node=..." или текст ошибки
+	list         list.Model
+	inputs       []textinput.Model
+	labels       []string
+	focus        int
+	result       string
+	isErr        bool
 }
 
 func initialModel(c *Client) model {
@@ -239,12 +239,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "s":
 				pid, err := supervise.Start(m.loc.Exe, []string{"-config", m.loc.Config, "-phishlets", m.loc.PhishDir, "-api", m.loc.API})
 				if err != nil {
-					return m.showResult("start: " + err.Error(), true), nil
+					return m.showResult("start: "+err.Error(), true), nil
 				}
 				return m.showResult(fmt.Sprintf("запущен pid=%d, жди 3с и жми r", pid), false), nil
 			case "x":
 				if err := supervise.Stop(); err != nil {
-					return m.showResult("stop: " + err.Error(), true), nil
+					return m.showResult("stop: "+err.Error(), true), nil
 				}
 				return m.showResult("остановлен", false), nil
 			case "l":
@@ -268,7 +268,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "c":
 				hc, err := m.client.CheckPhishlet(m.pickPhishlet)
 				if err != nil {
-					return m.showResult("check: " + err.Error(), true), nil
+					return m.showResult("check: "+err.Error(), true), nil
 				}
 				var b strings.Builder
 				for _, h := range hc {
@@ -285,7 +285,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "t":
 				on := !m.pickEnabled
 				if err := m.client.SetPhishlet(m.pickPhishlet, nil, &on); err != nil {
-					return m.showResult("on/off: " + err.Error(), true), nil
+					return m.showResult("on/off: "+err.Error(), true), nil
 				}
 				m.pickEnabled = on
 				state := "выключен"
@@ -368,7 +368,6 @@ func mkInputs(labels []string, defaults []string) ([]textinput.Model, []string) 
 	return out, labels
 }
 
-
 // phishNames возвращает "id ●/○" строки + карту enabled.
 func (m model) phishNames() ([]string, map[string]bool, error) {
 	det, err := m.client.PhishletsDetail()
@@ -400,7 +399,7 @@ func phishID(display string) string {
 func (m model) openDomainPick(phishlet string) (tea.Model, tea.Cmd) {
 	doms, err := m.client.ListDomains()
 	if err != nil {
-		return m.showResult("domains: " + err.Error(), true), nil
+		return m.showResult("domains: "+err.Error(), true), nil
 	}
 	m.pickPhishlet = phishlet
 	items := append([]string{"+ новый домен…"}, doms...)
@@ -413,7 +412,7 @@ func (m model) reloadPick() (tea.Model, tea.Cmd) {
 	case "phish-act", "phish-domain", "phish-toggle":
 		items, _, err := m.phishNames()
 		if err != nil {
-			return m.showResult("phishlets: " + err.Error(), true), nil
+			return m.showResult("phishlets: "+err.Error(), true), nil
 		}
 		title := m.pickTitle
 		kind := m.pickKind
@@ -424,20 +423,20 @@ func (m model) reloadPick() (tea.Model, tea.Cmd) {
 	case "domains":
 		doms, err := m.client.ListDomains()
 		if err != nil {
-			return m.showResult("domains: " + err.Error(), true), nil
+			return m.showResult("domains: "+err.Error(), true), nil
 		}
 		return m.openPick("пресеты доменов  (a-добавить x-удалить)", "domains", doms), nil
 	case "quicktest":
 		items, _, err := m.phishNames()
 		if err != nil {
-			return m.showResult("phishlets: " + err.Error(), true), nil
+			return m.showResult("phishlets: "+err.Error(), true), nil
 		}
 		return m.openPick("фишлет для быстрого теста", "quicktest", items), nil
 
 	case "camp":
 		list, err := m.client.ListCampaigns()
 		if err != nil {
-			return m.showResult("campaigns: " + err.Error(), true), nil
+			return m.showResult("campaigns: "+err.Error(), true), nil
 		}
 		items := make([]string, 0, len(list))
 		for _, c := range list {
@@ -452,7 +451,7 @@ func (m model) reloadPick() (tea.Model, tea.Cmd) {
 func (m model) quickCreate(id string) (tea.Model, tea.Cmd) {
 	det, err := m.client.PhishletsDetail()
 	if err != nil {
-		return m.showResult("detail: " + err.Error(), true), nil
+		return m.showResult("detail: "+err.Error(), true), nil
 	}
 	domain := ""
 	for _, p := range det {
@@ -461,7 +460,7 @@ func (m model) quickCreate(id string) (tea.Model, tea.Cmd) {
 		}
 	}
 	if domain == "" {
-		return m.showResult("нет домена у " + id, true), nil
+		return m.showResult("нет домена у "+id, true), nil
 	}
 	port := ""
 	if cfg, err := m.client.ServerConfig(); err == nil {
@@ -471,9 +470,9 @@ func (m model) quickCreate(id string) (tea.Model, tea.Cmd) {
 	}
 	path := "/l/qt-" + randSuffix()
 	if err := m.client.SmartLure(path, id, 60, 1, "", false); err != nil {
-		return m.showResult("lure: " + err.Error(), true), nil
+		return m.showResult("lure: "+err.Error(), true), nil
 	}
-	return m.showResult("открой в браузере:\nhttps://" + domain + port + path + "", false), nil
+	return m.showResult("открой в браузере:\nhttps://"+domain+port+path+"", false), nil
 }
 
 // pickEnter — выбор в пикере по kind.
@@ -487,7 +486,7 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 		m.pickPhishlet = phishID(sel.title)
 		det, err := m.client.PhishletsDetail()
 		if err != nil {
-			return m.showResult("detail: " + err.Error(), true), nil
+			return m.showResult("detail: "+err.Error(), true), nil
 		}
 		for _, p := range det {
 			if p.ID == m.pickPhishlet {
@@ -502,7 +501,7 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 		if m.pickKind == "phish-toggle" {
 			det, err := m.client.PhishletsDetail()
 			if err != nil {
-				return m.showResult("detail: " + err.Error(), true), nil
+				return m.showResult("detail: "+err.Error(), true), nil
 			}
 			on := true
 			for _, p := range det {
@@ -511,7 +510,7 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 				}
 			}
 			if err := m.client.SetPhishlet(id, nil, &on); err != nil {
-				return m.showResult("on/off: " + err.Error(), true), nil
+				return m.showResult("on/off: "+err.Error(), true), nil
 			}
 			state := "выключен"
 			if on {
@@ -528,10 +527,10 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.pickPhishlet == "" {
-			return m.showResult("домен: " + sel.title, false), nil
+			return m.showResult("домен: "+sel.title, false), nil
 		}
 		if err := m.client.SetPhishlet(m.pickPhishlet, []string{sel.title}, nil); err != nil {
-			return m.showResult("domain: " + err.Error(), true), nil
+			return m.showResult("domain: "+err.Error(), true), nil
 		}
 		return m.showResult(m.pickPhishlet+" → "+sel.title, false), nil
 	case "quicktest":
@@ -540,7 +539,7 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 		id := strings.Fields(sel.title)[0]
 		rep, err := m.client.Report(id, "md")
 		if err != nil {
-			return m.showResult("report: " + err.Error(), true), nil
+			return m.showResult("report: "+err.Error(), true), nil
 		}
 		lines := strings.Split(rep, "\n")
 		if len(lines) > 25 {
@@ -551,7 +550,7 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 		id := strings.Fields(sel.title)[0]
 		list, err := m.client.ListCampaigns()
 		if err != nil {
-			return m.showResult("campaigns: " + err.Error(), true), nil
+			return m.showResult("campaigns: "+err.Error(), true), nil
 		}
 		for _, c := range list {
 			if c.ID == id {
@@ -561,7 +560,7 @@ func (m model) pickEnter() (tea.Model, tea.Cmd) {
 		}
 		return m.showResult("нет кампании", true), nil
 	case "domains":
-		return m.showResult("домен: " + sel.title + "  (a-добавить x-удалить)", false), nil
+		return m.showResult("домен: "+sel.title+"  (a-добавить x-удалить)", false), nil
 	}
 	return m, nil
 }
@@ -573,11 +572,11 @@ func (m model) pickDelete() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if err := m.client.RemoveDomain(sel.title); err != nil {
-		return m.showResult("del: " + err.Error(), true), nil
+		return m.showResult("del: "+err.Error(), true), nil
 	}
 	doms, err := m.client.ListDomains()
 	if err != nil {
-		return m.showResult("domains: " + err.Error(), true), nil
+		return m.showResult("domains: "+err.Error(), true), nil
 	}
 	return m.openPick("пресеты доменов  (a-добавить x-удалить)", "domains", doms), nil
 }
@@ -621,7 +620,7 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		case sPhishlets:
 			items, _, err := m.phishNames()
 			if err != nil {
-				return m.showResult("phishlets: " + err.Error(), true), nil
+				return m.showResult("phishlets: "+err.Error(), true), nil
 			}
 			return m.openPick("select phishlet", "phish-act", items), nil
 		case sBlock:
@@ -647,13 +646,13 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		case sPhishDomain:
 			items, _, err := m.phishNames()
 			if err != nil {
-				return m.showResult("phishlets: " + err.Error(), true), nil
+				return m.showResult("phishlets: "+err.Error(), true), nil
 			}
 			return m.openPick("phishlet -> domain", "phish-domain", items), nil
 		case sPhishToggle:
 			items, _, err := m.phishNames()
 			if err != nil {
-				return m.showResult("phishlets: " + err.Error(), true), nil
+				return m.showResult("phishlets: "+err.Error(), true), nil
 			}
 			return m.openPick("phishlet -> on/off", "phish-toggle", items), nil
 		case sServer:
@@ -667,13 +666,13 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		case sQuickPick:
 			items, _, err := m.phishNames()
 			if err != nil {
-				return m.showResult("phishlets: " + err.Error(), true), nil
+				return m.showResult("phishlets: "+err.Error(), true), nil
 			}
 			return m.openPick("фишлет для быстрого теста", "quicktest", items), nil
 		case sCaptures:
 			caps, err := m.client.Captures()
 			if err != nil {
-				return m.showResult("captures: " + err.Error(), true), nil
+				return m.showResult("captures: "+err.Error(), true), nil
 			}
 			if len(caps) == 0 {
 				return m.showResult("захватов пока нет", false), nil
@@ -686,7 +685,7 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		case sCampRep:
 			list, err := m.client.ListCampaigns()
 			if err != nil {
-				return m.showResult("campaigns: " + err.Error(), true), nil
+				return m.showResult("campaigns: "+err.Error(), true), nil
 			}
 			items := make([]string, 0, len(list))
 			for _, c := range list {
@@ -696,7 +695,7 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		case sCamps:
 			list, err := m.client.ListCampaigns()
 			if err != nil {
-				return m.showResult("campaigns: " + err.Error(), true), nil
+				return m.showResult("campaigns: "+err.Error(), true), nil
 			}
 			items := make([]string, 0, len(list))
 			for _, c := range list {
@@ -704,14 +703,14 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 			}
 			return m.openPick("кампании", "camp", items), nil
 		case sCampNew:
-		m.inputs, m.labels = mkInputs(
+			m.inputs, m.labels = mkInputs(
 				[]string{"название", "phishlet id", "emails через запятую", "subject", "body html", "url_base", "ttl мин", "стоп через дней (0=∞)"},
 				[]string{"", "", "", "", "", "", "10080", "0"})
 			m.focus = 0
 		case sDomains:
 			doms, err := m.client.ListDomains()
 			if err != nil {
-				return m.showResult("domains: " + err.Error(), true), nil
+				return m.showResult("domains: "+err.Error(), true), nil
 			}
 			return m.openPick("domain presets (a-add x-del)", "domains", doms), nil
 		}
@@ -754,19 +753,19 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 		}
 		id, err := m.client.CreateCampaign(m.inputs[0].Value(), m.inputs[1].Value(), atoi(m.inputs[6].Value()), 1, endsAt)
 		if err != nil {
-			return m.showResult("create: " + err.Error(), true), nil
+			return m.showResult("create: "+err.Error(), true), nil
 		}
 		added, err := m.client.AddTargets(id, emails)
 		if err != nil {
-			return m.showResult("targets: " + err.Error(), true), nil
+			return m.showResult("targets: "+err.Error(), true), nil
 		}
 		targets, err := m.client.LaunchCampaign(id)
 		if err != nil {
-			return m.showResult("launch: " + err.Error(), true), nil
+			return m.showResult("launch: "+err.Error(), true), nil
 		}
 		sent, err := m.client.SendCampaign(id, m.inputs[3].Value(), m.inputs[4].Value(), m.inputs[5].Value())
 		if err != nil {
-			return m.showResult("send: " + err.Error(), true), nil
+			return m.showResult("send: "+err.Error(), true), nil
 		}
 		return m.showResult(fmt.Sprintf("кампания %s: целей %d, приманок %d, отправлено %d", id, added, len(targets), sent), false), nil
 	case sDomainAdd:
@@ -775,11 +774,11 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 			return m.showResult("need domain", true), nil
 		}
 		if err := m.client.AddDomain(domain); err != nil {
-			return m.showResult("add: " + err.Error(), true), nil
+			return m.showResult("add: "+err.Error(), true), nil
 		}
 		if m.pickPhishlet != "" {
 			if err := m.client.SetPhishlet(m.pickPhishlet, []string{domain}, nil); err != nil {
-				return m.showResult("domain: " + err.Error(), true), nil
+				return m.showResult("domain: "+err.Error(), true), nil
 			}
 			return m.showResult(m.pickPhishlet+" -> "+domain, false), nil
 		}
@@ -796,9 +795,9 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 			return m.showResult("id + domains required", true), nil
 		}
 		if err := m.client.SetPhishlet(m.inputs[0].Value(), domains, nil); err != nil {
-			return m.showResult("domain: " + err.Error(), true), nil
+			return m.showResult("domain: "+err.Error(), true), nil
 		}
-		return m.showResult("domains: " + strings.Join(domains, ", "), false), nil
+		return m.showResult("domains: "+strings.Join(domains, ", "), false), nil
 	case sPhishToggle:
 		v := strings.ToLower(strings.TrimSpace(m.inputs[1].Value()))
 		on := v == "y" || v == "yes" || v == "1" || v == "on"
@@ -806,7 +805,7 @@ func (m model) onEnter() (tea.Model, tea.Cmd) {
 			return m.showResult("id required", true), nil
 		}
 		if err := m.client.SetPhishlet(m.inputs[0].Value(), nil, &on); err != nil {
-			return m.showResult("on/off: " + err.Error(), true), nil
+			return m.showResult("on/off: "+err.Error(), true), nil
 		}
 		state := "off"
 		if on {
@@ -867,7 +866,7 @@ func (m model) header() string {
 		conn = errStyle.Render(m.conn)
 	}
 	banner := bannerStyle.Render("◈ PHANTOM v2") + dimStyle.Render(" // operator")
-	return banner + "  " + conn + "\n" + dimStyle.Render("› " + m.where()) + "\n" +
+	return banner + "  " + conn + "\n" + dimStyle.Render("› "+m.where()) + "\n" +
 		footStyle.Render("цифры выбор · esc назад · tab поле · enter выполнить · r обновить · ctrl+c выход") + "\n\n"
 }
 

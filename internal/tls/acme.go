@@ -56,7 +56,7 @@ func certOK(certFile, domain string) bool {
 	if cert == nil {
 		return false
 	}
-	if time.Now().Add(30*24*time.Hour).After(cert.NotAfter) {
+	if time.Now().Add(30 * 24 * time.Hour).After(cert.NotAfter) {
 		return false
 	}
 	for _, n := range cert.DNSNames {

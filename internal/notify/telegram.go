@@ -142,7 +142,7 @@ func short(s string) string {
 
 // update — минимальный парсинг getUpdates для callback_query.
 type update struct {
-	ID      int64 `json:"update_id"`
+	ID       int64 `json:"update_id"`
 	Callback *struct {
 		ID   string `json:"id"`
 		Data string `json:"data"`

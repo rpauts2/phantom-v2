@@ -5,8 +5,8 @@
 package campaign
 
 import (
-	"sort"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -130,7 +130,7 @@ func (s *Store) CreateStop(name, phishletID string, ttlMin, maxUses int, stopAt 
 	c := &Campaign{
 		ID: uuid.NewString()[:8], Name: name, PhishletID: phishletID,
 		LureBase: "/l/" + strings.ToLower(slug(name)) + "-",
-		TTLMin: ttlMin, MaxUses: maxUses,
+		TTLMin:   ttlMin, MaxUses: maxUses,
 		Status: StatusDraft, CreatedAt: time.Now(),
 		StopAt: stopAt,
 	}
@@ -303,10 +303,10 @@ func (s *Store) targetsFor(campaignID string) []*Target {
 
 // Row — строка отчета по цели (без plaintext, только факты и время).
 type Row struct {
-	Email                   string
-	LurePath                string
-	Sent, Opened, Clicked   string
-	Submitted               bool
+	Email                 string
+	LurePath              string
+	Sent, Opened, Clicked string
+	Submitted             bool
 }
 
 // Report собирает строки отчета (CSV/Markdown строятся поверх).
@@ -320,7 +320,7 @@ func (s *Store) Report(id string) ([]Row, bool) {
 	for _, t := range s.targetsFor(id) {
 		out = append(out, Row{
 			Email: t.Email, LurePath: t.LurePath,
-			Sent:  fmtTime(t.SentAt), Opened: fmtTime(t.OpenedAt),
+			Sent: fmtTime(t.SentAt), Opened: fmtTime(t.OpenedAt),
 			Clicked: fmtTime(t.ClickedAt), Submitted: t.Submitted,
 		})
 	}

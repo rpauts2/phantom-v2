@@ -2,11 +2,11 @@
 package api
 
 import (
-	"time"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/phantom-v2/phantom/internal/campaign"
 )

@@ -43,9 +43,9 @@ type Deps struct {
 	Config      func() map[string]any
 	Presets     DomainPresets
 	Caps        func(limit int) ([]map[string]any, error)
-	Campaigns   any // *campaign.Service (type-assert CampService)
-	PhishDir    string // dir для reload/persist YAML (hot-reload)
-	OnReload    func() error         // Reload стора (main wires store.Reload)
+	Campaigns   any          // *campaign.Service (type-assert CampService)
+	PhishDir    string       // dir для reload/persist YAML (hot-reload)
+	OnReload    func() error // Reload стора (main wires store.Reload)
 	OnUpsert    func(yaml []byte) (string, error)
 	OnGenerate  func(origin, domain, id, sub, html string) (string, error)
 }
@@ -200,7 +200,8 @@ func Handler(d Deps) http.Handler {
 		}
 		_ = json.NewEncoder(w).Encode(out)
 	}))
-	mux.HandleFunc("/api/v1/phishlets", guard(func(w http.ResponseWriter, r *http.Request) {		switch r.Method {
+	mux.HandleFunc("/api/v1/phishlets", guard(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
 		case http.MethodGet:
 			ids := []string{}
 			for _, p := range d.Store.All() {
@@ -390,7 +391,8 @@ type phishletAdmin interface {
 	Save(id string) error
 }
 
-func hostOnly(h string) string {	if host, _, err := net.SplitHostPort(h); err == nil {
+func hostOnly(h string) string {
+	if host, _, err := net.SplitHostPort(h); err == nil {
 		return host
 	}
 	return strings.Trim(h, "[]")

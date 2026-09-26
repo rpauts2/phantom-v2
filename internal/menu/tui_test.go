@@ -82,7 +82,6 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-
 func TestPhishAdminForms(t *testing.T) {
 	srv := fakeAPI()
 	defer srv.Close()
@@ -142,7 +141,7 @@ func TestPhishAdminForms(t *testing.T) {
 		t.Fatalf("toggle: screen=%d err=%v %s", m2.screen, m2.isErr, m2.result)
 	}
 
-// Domains: idx11 -> пресеты; x удаляет
+	// Domains: idx11 -> пресеты; x удаляет
 	m3 := initialModel(c)
 	m3.screen = sMenu
 	for i := 0; i < 11; i++ {

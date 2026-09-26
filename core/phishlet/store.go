@@ -3,10 +3,10 @@ package phishlet
 
 import (
 	"fmt"
-	"regexp"
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 

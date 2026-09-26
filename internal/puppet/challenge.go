@@ -24,8 +24,8 @@ var Collector = CollectorFor("/__fp")
 
 type Reporter struct {
 	Prefix string // дефолт /__fp
-	Block interface{ Block(key, reason string) }
-	Bus   interface {
+	Block  interface{ Block(key, reason string) }
+	Bus    interface {
 		Publish(ctx context.Context, topic string, payload any) error
 	}
 }

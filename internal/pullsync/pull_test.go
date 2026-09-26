@@ -2,10 +2,10 @@ package pullsync
 
 import (
 	"context"
-	"sync"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )

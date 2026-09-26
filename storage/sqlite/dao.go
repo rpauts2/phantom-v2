@@ -97,14 +97,14 @@ VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET phishlet_id=excluded.phi
 }
 
 func (d *DB) ListSmartLures() ([]SmartLureRow, error) {
-rows, err := d.sql.Query(`SELECT path,phishlet_id,expires_at,max_uses,uses,bound_ip,require_challenge,redirect_url FROM smart_lures`)
+	rows, err := d.sql.Query(`SELECT path,phishlet_id,expires_at,max_uses,uses,bound_ip,require_challenge,redirect_url FROM smart_lures`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []SmartLureRow
 	for rows.Next() {
-var r SmartLureRow
+		var r SmartLureRow
 		var rc int
 		if err := rows.Scan(&r.Path, &r.PhishletID, &r.ExpiresAt, &r.MaxUses, &r.Uses, &r.BoundIP, &rc, &r.RedirectURL); err != nil {
 			return nil, err
@@ -208,13 +208,13 @@ VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET sent=excluded.sent,opened=
 
 type CampaignRow struct {
 	ID, Name, PhishletID, Status string
-	TTLMin, MaxUses               int
-	CreatedAt                     int64
-	StopAt                        int64
+	TTLMin, MaxUses              int
+	CreatedAt                    int64
+	StopAt                       int64
 }
 
 type TargetRow struct {
-	ID, CampaignID, Email, Lure string
+	ID, CampaignID, Email, Lure      string
 	Sent, Opened, Clicked, Submitted bool
 }
 

@@ -12,9 +12,9 @@ import (
 )
 
 type Memory struct {
-	mu   sync.RWMutex
-	m    map[string]*core.Session
-	ttl  time.Duration
+	mu  sync.RWMutex
+	m   map[string]*core.Session
+	ttl time.Duration
 }
 
 func NewMemory(ttl time.Duration) *Memory {

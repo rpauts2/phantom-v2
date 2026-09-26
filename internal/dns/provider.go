@@ -51,7 +51,7 @@ func (f File) append(line string) error {
 	if err := os.MkdirAll(filepath.Dir(f.Path), 0o750); err != nil {
 		return err
 	}
-fh, err := os.OpenFile(f.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	fh, err := os.OpenFile(f.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}

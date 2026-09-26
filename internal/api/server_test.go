@@ -10,12 +10,12 @@ import (
 
 	"github.com/phantom-v2/phantom/core"
 	"github.com/phantom-v2/phantom/core/phishlet"
-	"os"
-	"path/filepath"
 	"github.com/phantom-v2/phantom/internal/blocklist"
 	"github.com/phantom-v2/phantom/internal/campaign"
 	"github.com/phantom-v2/phantom/internal/lures"
 	"github.com/phantom-v2/phantom/internal/mailer"
+	"os"
+	"path/filepath"
 )
 
 func testDeps() Deps {
@@ -75,7 +75,8 @@ func TestUIGating(t *testing.T) {
 
 // /dashboard за тем же stealth-guard: без X-Stealth-Host — 404,
 // с корректным хостом — 200 + html.
-func TestDashboardStealth(t *testing.T) {	h := Handler(testDeps())
+func TestDashboardStealth(t *testing.T) {
+	h := Handler(testDeps())
 
 	req := httptest.NewRequest("GET", "/dashboard", nil)
 	rec := httptest.NewRecorder()
@@ -99,7 +100,8 @@ func TestDashboardStealth(t *testing.T) {	h := Handler(testDeps())
 	}
 }
 
-func withHooks(d Deps) Deps {	d.OnReload = func() error { return nil }
+func withHooks(d Deps) Deps {
+	d.OnReload = func() error { return nil }
 	d.OnUpsert = func(yml []byte) (string, error) {
 		up, ok := d.Store.(interface {
 			UpsertYAML([]byte) (*core.Phishlet, error)
@@ -194,7 +196,6 @@ func TestConfigEndpoint(t *testing.T) {
 		t.Fatalf("bad config: %v", out)
 	}
 }
-
 
 func TestPhishletAdmin(t *testing.T) {
 	d := testDeps()

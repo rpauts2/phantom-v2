@@ -1,12 +1,12 @@
 package proxy
 
 import (
-	"time"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/phantom-v2/phantom/core/phishlet"
 	"github.com/phantom-v2/phantom/core/session"

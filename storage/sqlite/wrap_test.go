@@ -24,5 +24,5 @@ func TestBlockBounded(t *testing.T) {
 
 type stubBlock struct{ m map[string]bool }
 
-func (s stubBlock) Block(k, _ string)   { s.m[k] = true }
+func (s stubBlock) Block(k, _ string)     { s.m[k] = true }
 func (s stubBlock) Blocked(k string) bool { return s.m[k] }

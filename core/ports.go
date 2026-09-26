@@ -34,13 +34,13 @@ type ProxyHost struct {
 }
 
 type SubFilter struct {
-	TriggersOn   string   `yaml:"triggers_on"`
-	Search       string   `yaml:"search"`
-	Replace      string   `yaml:"replace"`
-	Mime         []string `yaml:"mime"`
-	RedirectOnly bool     `yaml:"redirect_only"`
-	Regex        bool     `yaml:"regex"`
-	When         string   `yaml:"when"`
+	TriggersOn   string         `yaml:"triggers_on"`
+	Search       string         `yaml:"search"`
+	Replace      string         `yaml:"replace"`
+	Mime         []string       `yaml:"mime"`
+	RedirectOnly bool           `yaml:"redirect_only"`
+	Regex        bool           `yaml:"regex"`
+	When         string         `yaml:"when"`
 	Compiled     *regexp.Regexp `yaml:"-"`
 }
 
