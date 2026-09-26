@@ -14,6 +14,9 @@ import (
 )
 
 var (
+	bannerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99")).
+		Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("99")).
+		Padding(0, 1)
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63")).
 			Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).
 			Padding(0, 1)
@@ -159,6 +162,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.pickEnter()
 			}
 			return m.onEnter()
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+			if m.screen == sMenu {
+				idx := int(msg.String()[0] - '1')
+				if idx >= 0 && idx < len(m.list.Items()) {
+					m.list.Select(idx)
+					return m.onEnter()
+				}
+				return m, nil
+			}
+		case "r", "R", "к", "К":
+			if m.screen == sPick {
+				return m.reloadPick()
+			}
 		case "tab", "shift+tab", "up", "down":
 			if m.isForm() {
 				return m.moveFocus(msg.String())
@@ -339,6 +355,40 @@ func (m model) openDomainPick(phishlet string) (tea.Model, tea.Cmd) {
 	m.pickPhishlet = phishlet
 	items := append([]string{"+ новый домен…"}, doms...)
 	return m.openPick("домен для "+phishlet, "domain", items), nil
+}
+
+// reloadPick перечитывает текущий пикер (клавиша r).
+func (m model) reloadPick() (tea.Model, tea.Cmd) {
+	switch m.pickKind {
+	case "phish-act", "phish-domain", "phish-toggle":
+		items, _, err := m.phishNames()
+		if err != nil {
+			return m.showResult("phishlets: " + err.Error(), true), nil
+		}
+		title := m.pickTitle
+		kind := m.pickKind
+		m = m.openPick(title, kind, items)
+		return m, nil
+	case "domain":
+		return m.openDomainPick(m.pickPhishlet)
+	case "domains":
+		doms, err := m.client.ListDomains()
+		if err != nil {
+			return m.showResult("domains: " + err.Error(), true), nil
+		}
+		return m.openPick("пресеты доменов  (a-добавить x-удалить)", "domains", doms), nil
+	case "camp":
+		list, err := m.client.ListCampaigns()
+		if err != nil {
+			return m.showResult("campaigns: " + err.Error(), true), nil
+		}
+		items := make([]string, 0, len(list))
+		for _, c := range list {
+			items = append(items, c.ID+" "+c.Name+" ["+c.Status+"]")
+		}
+		return m.openPick("кампании", "camp", items), nil
+	}
+	return m, nil
 }
 
 // pickEnter — выбор в пикере по kind.
@@ -679,8 +729,51 @@ func (m model) header() string {
 	if strings.HasPrefix(m.conn, "ERR") {
 		conn = errStyle.Render(m.conn)
 	}
-	return titleStyle.Render("◆ Phantom v2") + "  " + conn + "\n" +
-		footStyle.Render("esc назад · tab поле · enter выполнить · ctrl+c выход") + "\n\n"
+	banner := bannerStyle.Render("◈ PHANTOM v2") + dimStyle.Render(" // operator")
+	return banner + "  " + conn + "\n" + dimStyle.Render("› " + m.where()) + "\n" +
+		footStyle.Render("цифры выбор · esc назад · tab поле · enter выполнить · r обновить · ctrl+c выход") + "\n\n"
+}
+
+func (m model) where() string {
+	switch m.screen {
+	case sConnect:
+		return "подключение"
+	case sMenu:
+		return "меню"
+	case sDashboard:
+		return "меню › dashboard"
+	case sConfig:
+		return "меню › config"
+	case sPhishlets:
+		return "меню › фишлеты"
+	case sBlock:
+		return "меню › block"
+	case sLure:
+		return "меню › smart lure"
+	case sReload:
+		return "меню › reload"
+	case sGenerate:
+		return "меню › generate"
+	case sPhishDomain:
+		return "меню › домен"
+	case sPhishToggle:
+		return "меню › вкл/выкл"
+	case sDomains:
+		return "меню › пресеты"
+	case sPick:
+		return "меню › выбор: " + m.pickTitle
+	case sPhishDetail:
+		return "фишлеты › " + m.pickPhishlet
+	case sDomainAdd:
+		return "меню › новый домен"
+	case sCampNew:
+		return "меню › новая кампания"
+	case sCaptures:
+		return "меню › захваты"
+	case sResult:
+		return "результат"
+	}
+	return ""
 }
 
 func (m model) View() string {
@@ -690,7 +783,7 @@ func (m model) View() string {
 	case sMenu:
 		return m.header() + m.list.View()
 	case sPick:
-		return m.header() + m.pickList.View() + footStyle.Render("\nenter — выбрать")
+		return m.header() + m.pickList.View() + footStyle.Render("\nenter — выбрать · r — обновить")
 	case sPhishDetail:
 		state := "○ выключен"
 		if m.pickEnabled {

@@ -218,3 +218,53 @@ func TestCapturesScreen(t *testing.T) {
 	}
 }
 
+func TestDigitsAndCrumb(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	m := initialModel(c)
+	m.screen = sMenu
+	if m.where() != "\u043c\u0435\u043d\u044e" {
+		t.Fatalf("crumb: %q", m.where())
+	}
+	// цифра 3 -> Phishlets (idx2) -> пикер
+	nm, _ := m.Update(key("3"))
+	m = nm.(model)
+	if m.screen != sPick || m.where() == "menu" {
+		t.Fatalf("digit: screen=%d crumb=%q", m.screen, m.where())
+	}
+	// r в пикере — перезагрузка списка
+	nm, _ = m.Update(key("r"))
+	m = nm.(model)
+	if m.screen != sPick {
+		t.Fatalf("refresh: screen=%d", m.screen)
+	}
+	// крошка пикера содержит заголовок
+	if m.where() == "" {
+		t.Fatal("empty crumb")
+	}
+}
+
+func TestReloadPickKinds(t *testing.T) {
+	srv := fakeAPI()
+	defer srv.Close()
+	c := &Client{Base: srv.URL, Stealth: "s3cr3t"}
+	m := initialModel(c)
+	m.screen = sMenu
+	// Campaigns idx9 -> пикер camp
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	for i := 0; i < 9; i++ {
+		nm, _ := m.Update(down)
+		m = nm.(model)
+	}
+	nm, _ := m.Update(key("enter"))
+	m = nm.(model)
+	if m.pickKind != "camp" {
+		t.Fatalf("kind: %s", m.pickKind)
+	}
+	nm, _ = m.Update(key("r"))
+	m = nm.(model)
+	if m.screen != sPick || m.pickKind != "camp" {
+		t.Fatalf("camp refresh: screen=%d kind=%s", m.screen, m.pickKind)
+	}
+}
