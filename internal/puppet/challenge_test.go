@@ -27,7 +27,7 @@ func TestChallengeBlocksBot(t *testing.T) {
 	if rec2.Code != 204 || !bl.Blocked("9.9.9.9") {
 		t.Fatal("bot not blocked")
 	}
-	if bl.Blocked("9.9.9.9:1") {
-		t.Fatal("port must be stripped")
+	if !bl.Blocked("9.9.9.9:1") {
+		t.Fatal("port form must match too (normalize)")
 	}
 }

@@ -1,7 +1,11 @@
 // Package blocklist — IP/JA4 бан (Evilginx blacklist паритет).
 package blocklist
 
-import "sync"
+import (
+	"net"
+	"strings"
+	"sync"
+)
 
 type Store struct {
 	mu sync.RWMutex
@@ -11,6 +15,7 @@ type Store struct {
 func New() *Store { return &Store{m: map[string]string{}} }
 
 func (s *Store) Block(key, reason string) {
+	key = Normalize(key)
 	if key == "" {
 		return
 	}
@@ -20,6 +25,7 @@ func (s *Store) Block(key, reason string) {
 }
 
 func (s *Store) Blocked(key string) bool {
+	key = Normalize(key)
 	if key == "" {
 		return false
 	}
@@ -27,6 +33,17 @@ func (s *Store) Blocked(key string) bool {
 	defer s.mu.RUnlock()
 	_, ok := s.m[key]
 	return ok
+}
+
+// Normalize режет порт у IP (1.2.3.4:5678 -> 1.2.3.4), JA4 не трогает.
+func Normalize(key string) string {
+	key = strings.TrimSpace(key)
+	if h, _, err := net.SplitHostPort(key); err == nil {
+		if net.ParseIP(h) != nil {
+			return h
+		}
+	}
+	return key
 }
 
 func (s *Store) Reason(key string) string {

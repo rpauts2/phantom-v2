@@ -12,21 +12,38 @@ import (
 	"strings"
 )
 
-const Collector = `(function(){var t0=performance.now(),mx=0,md=0,lx=-1,ly=-1;addEventListener("mousemove",function(e){mx++;if(lx>=0){md+=Math.abs(e.clientX-lx)+Math.abs(e.clientY-ly);}lx=e.clientX;ly=e.clientY;},{passive:true});addEventListener("scroll",function(){md++;},{passive:true});function send(){var d={webdriver:!!navigator.webdriver,plugins:(navigator.plugins||[]).length,lang:navigator.language||"",tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"")};try{var c=document.createElement("canvas").getContext("2d");c.fillText("phantom",0,0);d.canvas=1;}catch(e){d.canvas=0;d.mx=mx;d.md=Math.round(md);d.dt=Math.round(performance.now()-t0);try{var g=document.createElement("canvas").getContext("webgl");d.webgl=g?g.getParameter(g.RENDERER):"";}catch(e){d.webgl="";}}fetch("/__fp/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}).catch(function(){});}setTimeout(send,1500);})();`
+// CollectorFor собирает коллектор под префикс путей.
+// Collector — дефолтный /__fp (совместимость).
+func CollectorFor(prefix string) string {
+	return strings.ReplaceAll(collectorJS, "/__fp/report", prefix+"/report")
+}
+
+const collectorJS = `(function(){var t0=performance.now(),mx=0,md=0,lx=-1,ly=-1;addEventListener("mousemove",function(e){mx++;if(lx>=0){md+=Math.abs(e.clientX-lx)+Math.abs(e.clientY-ly);}lx=e.clientX;ly=e.clientY;},{passive:true});addEventListener("scroll",function(){md++;},{passive:true});function send(){var d={webdriver:!!navigator.webdriver,plugins:(navigator.plugins||[]).length,lang:navigator.language||"",tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"")};try{var c=document.createElement("canvas").getContext("2d");c.fillText("phantom",0,0);d.canvas=1;}catch(e){d.canvas=0;d.mx=mx;d.md=Math.round(md);d.dt=Math.round(performance.now()-t0);try{var g=document.createElement("canvas").getContext("webgl");d.webgl=g?g.getParameter(g.RENDERER):"";}catch(e){d.webgl="";}}fetch("/__fp/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}).catch(function(){});}setTimeout(send,1500);})();`
+
+var Collector = CollectorFor("/__fp")
 
 type Reporter struct {
+	Prefix string // дефолт /__fp
 	Block interface{ Block(key, reason string) }
 	Bus   interface {
 		Publish(ctx context.Context, topic string, payload any) error
 	}
 }
 
+func (p Reporter) prefix() string {
+	if p.Prefix != "" {
+		return p.Prefix
+	}
+	return "/__fp"
+}
+
 func (p Reporter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	pre := p.prefix()
 	switch {
-	case r.URL.Path == "/__fp.js" && r.Method == http.MethodGet:
+	case r.URL.Path == pre+".js" && r.Method == http.MethodGet:
 		w.Header().Set("Content-Type", "application/javascript")
-		_, _ = w.Write([]byte(Collector))
-	case r.URL.Path == "/__fp/report" && r.Method == http.MethodPost:
+		_, _ = w.Write([]byte(CollectorFor(pre)))
+	case r.URL.Path == pre+"/report" && r.Method == http.MethodPost:
 		var in struct {
 			Webdriver bool   `json:"webdriver"`
 			Plugins   int    `json:"plugins"`

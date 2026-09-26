@@ -29,3 +29,13 @@ func TestAutocertDefault(t *testing.T) {
 		t.Fatal("autocert must default ON")
 	}
 }
+
+func TestNameDefaults(t *testing.T) {
+	c, err := Load(writeTemp(t, valid()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SessCookie != "sid" || c.ChallPath != "/__fp" {
+		t.Fatalf("defaults: %+v", c)
+	}
+}

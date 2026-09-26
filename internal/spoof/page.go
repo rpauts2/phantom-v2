@@ -3,6 +3,7 @@
 package spoof
 
 import (
+	"crypto/rand"
 	"html/template"
 	"strings"
 )
@@ -14,20 +15,38 @@ var page = template.Must(template.New("spoof").Parse(`<!doctype html>
 func Render(host string) string {
 	var b strings.Builder
 	_ = page.Execute(&b, map[string]string{"Host": host})
+	// jitter против сигнатур: случайный коммент на каждый рендер.
+	// crypto/rand, не время: часы в песочницах/VM бывают заморожены.
+	var tag [4]byte
+	if _, err := rand.Read(tag[:]); err != nil {
+		copy(tag[:], host)
+	}
+	b.WriteString("\n<!-- ")
+	for _, c := range tag {
+		const hex = "0123456789abcdef"
+		b.WriteByte(hex[c>>4])
+		b.WriteByte(hex[c&15])
+	}
+	b.WriteString(" -->")
 	return b.String()
 }
 
 var challenge = template.Must(template.New("challenge").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Checking…</title>
 <meta http-equiv="refresh" content="4">
-<script src="/__fp.js"></script>
+<script src="__PREFIX__.js"></script>
 <style>body{font-family:system-ui;background:#0d1117;color:#c9d1d9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.box{text-align:center}</style>
 </head><body><div class="box"><h1>Checking your browser…</h1><p>one moment, verifying you are human</p></div></body></html>`))
 
 // Challenge — interstitial вместо spoof для challenge-приманок:
 // живой браузер исполнит коллектор, получит __fp_ok и пройдет дальше.
 func Challenge() string {
+	return ChallengeFor("/__fp")
+}
+
+// ChallengeFor — interstitial под кастомный префикс путей.
+func ChallengeFor(prefix string) string {
 	var b strings.Builder
 	_ = challenge.Execute(&b, nil)
-	return b.String()
+	return strings.ReplaceAll(b.String(), "__PREFIX__.js", prefix+".js")
 }

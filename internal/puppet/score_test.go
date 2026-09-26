@@ -1,8 +1,11 @@
 package puppet
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/phantom-v2/phantom/internal/blocklist"
 )
 
 func TestScoreBehavior(t *testing.T) {
@@ -25,5 +28,27 @@ func TestCollectorHasBehavior(t *testing.T) {
 		if !strings.Contains(Collector, s) {
 			t.Fatalf("collector missing %s", s)
 		}
+	}
+}
+
+func TestPrefix(t *testing.T) {
+	if !strings.Contains(CollectorFor("/zz9"), "/zz9/report") {
+		t.Fatal("prefix not applied")
+	}
+	if !strings.Contains(Collector, "/__fp/report") {
+		t.Fatal("default broken")
+	}
+	r := Reporter{Prefix: "/zz9", Block: blocklist.New()}
+	req := httptest.NewRequest("GET", "/zz9.js", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("custom js: %d", rec.Code)
+	}
+	req2 := httptest.NewRequest("GET", "/__fp.js", nil)
+	rec2 := httptest.NewRecorder()
+	r.ServeHTTP(rec2, req2)
+	if rec2.Code != 404 {
+		t.Fatalf("old path must 404: %d", rec2.Code)
 	}
 }

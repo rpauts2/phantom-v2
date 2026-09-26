@@ -15,6 +15,8 @@ type Config struct {
 	HTTPSPort int      `yaml:"https_port"`
 	Shared443 bool     `yaml:"shared_443"`
 	NodeID    string   `yaml:"node_id"`
+	SessCookie string  `yaml:"session_cookie"`
+	ChallPath  string  `yaml:"challenge_path"`
 	Domains   []string `yaml:"domains"`
 	Storage   Storage  `yaml:"storage"`
 	TLS       TLS      `yaml:"tls"`
@@ -137,6 +139,18 @@ func (c *Config) Validate() error {
 	}
 	if strings.ContainsAny(c.NodeID, " \t/") {
 		return fmt.Errorf("node_id must not contain spaces or slashes")
+	}
+	if c.SessCookie == "" {
+		c.SessCookie = "sid"
+	}
+	if strings.ContainsAny(c.SessCookie, " \t/;=") {
+		return fmt.Errorf("session_cookie: bad chars")
+	}
+	if c.ChallPath == "" {
+		c.ChallPath = "/__fp"
+	}
+	if !strings.HasPrefix(c.ChallPath, "/") {
+		return fmt.Errorf("challenge_path: must start with /")
 	}
 	switch c.LogLevel {
 	case "debug", "info", "warn", "error":

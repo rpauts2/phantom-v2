@@ -179,9 +179,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.pickEnter()
 			}
 			return m.onEnter()
-		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9", "0":
 			if m.screen == sMenu {
-				idx := int(msg.String()[0] - '1')
+				c := msg.String()[0]
+				idx := int(c - '1')
+				if c == '0' {
+					idx = 9
+				}
 				if idx >= 0 && idx < len(m.list.Items()) {
 					m.list.Select(idx)
 					return m.onEnter()

@@ -82,3 +82,10 @@ func TestSetEnabledSave(t *testing.T) {
 		t.Fatal("unknown must fail")
 	}
 }
+func TestRedirectURLValidate(t *testing.T) {
+	st := NewStore()
+	_, err := st.UpsertYAML([]byte("id: r\nversion: 2\nbase_domains: [\"a.test\"]\nproxy_hosts: [{phish_sub: \"l\", orig_sub: \"o\", domain: \"u.test\"}]\nlure_path: \"/l/r\"\nenabled: true\nredirect_url: \"javascript:alert(1)\"\n"))
+	if err == nil {
+		t.Fatal("bad redirect scheme must fail")
+	}
+}

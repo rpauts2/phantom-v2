@@ -155,6 +155,9 @@ func validate(p *core.Phishlet) error {
 			f.Compiled = re
 		}
 	}
+	if p.RedirectURL != "" && !strings.HasPrefix(p.RedirectURL, "https://") && !strings.HasPrefix(p.RedirectURL, "http://") {
+		return fmt.Errorf("redirect_url must be http(s)")
+	}
 	for _, fr := range p.ForcePost {
 		if fr.Key == "" {
 			return fmt.Errorf("force_post: key required")
